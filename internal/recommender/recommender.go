@@ -60,6 +60,22 @@ func RecommendWithPreference(task string, preference Preference) Recommendation 
 			ReasoningSetting: "GPT reasoning level: high",
 			Reason:           "Best fit for complex or high-risk work where stronger reasoning is worth the extra cost; preference does not override the task's risk.",
 		}
+	case traits.nuancedRoutine && !traits.coding:
+		switch preference {
+		case PreferQuality:
+			return Recommendation{Model: GPT55, ReasoningSetting: "GPT reasoning level: medium", Reason: "Quality preference adds reasoning depth for a nuanced routine task while avoiding the highest-cost setting."}
+		case PreferCost:
+			return Recommendation{Model: GPT54, ReasoningSetting: "GPT reasoning level: medium", Reason: "Cost preference uses a lower-cost model with enough reasoning for messy but low-risk work."}
+		default:
+			return Recommendation{Model: GPT55, ReasoningSetting: "GPT reasoning level: low", Reason: "Good fit for lightweight work with messy input, nuance, or multiple simple constraints."}
+		}
+	case traits.simple && !traits.largeContext:
+		switch preference {
+		case PreferQuality:
+			return Recommendation{Model: GPT54, ReasoningSetting: "GPT reasoning level: medium", Reason: "Quality preference adds reasoning depth, but the simple, low-risk task does not justify a highest-cost model."}
+		default:
+			return Recommendation{Model: GPT54, ReasoningSetting: "GPT reasoning level: low", Reason: "A lower-cost, fast choice is adequate for a simple, low-risk task."}
+		}
 	case traits.largeContext || traits.coding:
 		switch preference {
 		case PreferQuality:
@@ -69,21 +85,14 @@ func RecommendWithPreference(task string, preference Preference) Recommendation 
 		case PreferSpeed:
 			return Recommendation{Model: GPT55, ReasoningSetting: "GPT reasoning level: low", Reason: "Speed preference keeps stronger coding capability while avoiding higher reasoning because the task is not high-risk or deeply complex."}
 		default:
-			return Recommendation{Model: GPT55, ReasoningSetting: "GPT reasoning level: low", Reason: "Good balance for development work where stronger model capability at low reasoning is likely cheaper than a medium-effort Sonnet run."}
-		}
-	case traits.simple:
-		switch preference {
-		case PreferQuality:
-			return Recommendation{Model: GPT54, ReasoningSetting: "GPT reasoning level: medium", Reason: "Quality preference adds reasoning depth, but the simple task does not justify a highest-cost model."}
-		default:
-			return Recommendation{Model: GPT54, ReasoningSetting: "GPT reasoning level: low", Reason: "A lower-cost, fast choice is adequate for a simple, low-risk task."}
+			return Recommendation{Model: GPT55, ReasoningSetting: "GPT reasoning level: low", Reason: "Good balance for development work where stronger model capability at low reasoning is likely cheaper than a medium-effort run."}
 		}
 	default:
 		switch preference {
 		case PreferSpeed, PreferCost:
 			return Recommendation{Model: GPT54, ReasoningSetting: "GPT reasoning level: low", Reason: "The task is ambiguous but not complex, so the preference favors a lower-cost, faster setting."}
 		default:
-			return Recommendation{Model: GPT54, ReasoningSetting: "GPT reasoning level: medium", Reason: "Conservative default for an ambiguous task: enough reasoning for unclear work while keeping total token cost below a medium-effort Sonnet run."}
+			return Recommendation{Model: GPT54, ReasoningSetting: "GPT reasoning level: medium", Reason: "Conservative default for an ambiguous task: enough reasoning for unclear work."}
 		}
 	}
 }
@@ -94,21 +103,23 @@ func Format(rec Recommendation) string {
 }
 
 type taskTraits struct {
-	simple        bool
-	coding        bool
-	largeContext  bool
-	deepReasoning bool
-	highRisk      bool
+	simple         bool
+	coding         bool
+	largeContext   bool
+	nuancedRoutine bool
+	deepReasoning  bool
+	highRisk       bool
 }
 
 func classify(task string) taskTraits {
 	text := strings.ToLower(task)
 	return taskTraits{
-		simple:        hasAny(text, "summarize", "summary", "rewrite", "proofread", "format", "extract", "release notes", "short email"),
-		coding:        hasAny(text, "code", "coding", "implement", "refactor", "debug", "test", "typescript", "golang", "go ", "python", "api", "module", "bug"),
-		largeContext:  hasAny(text, "large", "many files", "repository", "repo", "codebase", "migration"),
-		deepReasoning: hasAny(text, "architecture", "design", "distributed", "intermittent", "root cause", "plan", "analyze", "tradeoff", "complex"),
-		highRisk:      hasAny(text, "security", "auth", "authentication", "payment", "billing", "production", "data loss", "incident", "compliance"),
+		simple:        hasAny(text, "summarize", "summary", "rewrite", "proofread", "format", "extract", "release notes", "short email", "typo", "readme", "rename", "one-line", "small", "minor", "lint", "comment", "documentation"),
+		coding:        hasAny(text, "code", "coding", "implement", "refactor", "debug", "test", "typescript", "golang", "go ", "python", "api", "module", "bug", "endpoint", "function"),
+		largeContext:   hasAny(text, "large", "long", "many files", "repository", "repo", "codebase", "migration", "cross-service", "multi-service", "10-page", "10 page"),
+		nuancedRoutine: hasAny(text, "messy", "inconsistent", "nuanced", "firm but empathetic", "preserve intent", "multiple constraints", "overlap", "overlapping", "edge case", "requirements", "product request", "project plan", "meeting notes", "support reply", "policy"),
+		deepReasoning:  hasAny(text, "architecture", "system design", "distributed", "intermittent", "root cause", "tradeoff", "complex", "race condition", "concurrency", "performance", "scalability"),
+		highRisk:      hasAny(text, "security", "auth", "authentication", "payment", "billing", "production", "data loss", "incident", "compliance", "privacy", "encryption", "permissions"),
 	}
 }
 

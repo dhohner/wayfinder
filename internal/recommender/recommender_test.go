@@ -20,13 +20,37 @@ func TestRecommendReturnsOneSupportedModelAndProviderSetting(t *testing.T) {
 }
 
 func TestRecommendSimpleTaskCanUseLowerCostCandidate(t *testing.T) {
-	rec := Recommend("summarize these release notes")
-
-	if rec.Model != GPT54 {
-		t.Fatalf("expected %s, got %s", GPT54, rec.Model)
+	cases := []string{
+		"summarize these release notes",
+		"fix a typo in a README",
+		"rename a variable in a small Go function",
 	}
-	if !strings.HasPrefix(rec.ReasoningSetting, "GPT reasoning level:") {
-		t.Fatalf("expected GPT terminology, got %q", rec.ReasoningSetting)
+
+	for _, task := range cases {
+		rec := Recommend(task)
+
+		if rec.Model != GPT54 {
+			t.Fatalf("expected %s for %q, got %s", GPT54, task, rec.Model)
+		}
+		if rec.ReasoningSetting != "GPT reasoning level: low" {
+			t.Fatalf("expected low reasoning for %q, got %q", task, rec.ReasoningSetting)
+		}
+	}
+}
+
+func TestRecommendNuancedRoutineTaskUsesGPT55LowReasoning(t *testing.T) {
+	cases := []string{
+		"rewrite this support reply to be firm but empathetic",
+		"extract requirements from a messy product request",
+		"convert inconsistent meeting notes into a clean project plan",
+	}
+
+	for _, task := range cases {
+		rec := Recommend(task)
+
+		if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: low" {
+			t.Fatalf("expected low-reasoning GPT 5.5 for %q, got %+v", task, rec)
+		}
 	}
 }
 
@@ -49,6 +73,14 @@ func TestRecommendCodingTaskAvoidsMediumEffortSonnetDefault(t *testing.T) {
 	}
 	if rec.ReasoningSetting != "GPT reasoning level: low" {
 		t.Fatalf("expected GPT low reasoning, got %q", rec.ReasoningSetting)
+	}
+}
+
+func TestRecommendComplexDevelopmentTaskRaisesReasoning(t *testing.T) {
+	rec := Recommend("debug an intermittent distributed race condition in production")
+
+	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: high" {
+		t.Fatalf("expected high-reasoning %s for complex task, got %+v", GPT55, rec)
 	}
 }
 

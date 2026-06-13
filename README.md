@@ -15,8 +15,10 @@ Example output:
 ```text
 Model: GPT 5.5
 Reasoning: GPT reasoning level: high
-Reason: Best fit for complex or high-risk work where stronger reasoning is worth the extra cost.
+Reason: Best fit for complex or high-risk work where stronger reasoning is worth the extra cost; preference does not override the task's risk.
 ```
+
+Wayfinder varies recommendations by task complexity. Simple, low-risk work can use lower-cost settings, complex or high-risk development work receives stronger reasoning, and ambiguous input receives a conservative offline default instead of a clarification prompt.
 
 ## Preference flags
 
