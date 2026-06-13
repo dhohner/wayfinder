@@ -52,6 +52,68 @@ func TestRecommendCodingTaskAvoidsMediumEffortSonnetDefault(t *testing.T) {
 	}
 }
 
+func TestPreferQualityRaisesReasoningWhenTraitsJustifyIt(t *testing.T) {
+	rec := RecommendWithPreference("implement a Go API endpoint", PreferQuality)
+
+	if rec.Model != GPT55 {
+		t.Fatalf("expected stronger model %s, got %s", GPT55, rec.Model)
+	}
+	if rec.ReasoningSetting != "GPT reasoning level: medium" {
+		t.Fatalf("expected quality bias to raise reasoning, got %q", rec.ReasoningSetting)
+	}
+}
+
+func TestPreferCostCanChooseLowerCostForModerateTask(t *testing.T) {
+	rec := RecommendWithPreference("implement a Go API endpoint", PreferCost)
+
+	if rec.Model != GPT54 {
+		t.Fatalf("expected lower-cost %s, got %s", GPT54, rec.Model)
+	}
+}
+
+func TestPreferSpeedLowersReasoningWhenTaskIsNotComplex(t *testing.T) {
+	rec := RecommendWithPreference("help me with this task", PreferSpeed)
+
+	if rec.Model != GPT54 || rec.ReasoningSetting != "GPT reasoning level: low" {
+		t.Fatalf("expected fast low-reasoning GPT 5.4, got %+v", rec)
+	}
+}
+
+func TestPreferSpeedKeepsCodingCapabilityForModerateCodingTask(t *testing.T) {
+	rec := RecommendWithPreference("implement a Go API endpoint", PreferSpeed)
+
+	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: low" {
+		t.Fatalf("expected speed preference to keep low-reasoning GPT 5.5 for coding, got %+v", rec)
+	}
+}
+
+func TestPreferQualityDoesNotAlwaysSelectHighestCost(t *testing.T) {
+	rec := RecommendWithPreference("summarize these release notes", PreferQuality)
+
+	if rec.Model != GPT54 {
+		t.Fatalf("expected quality preference to keep cheaper model for simple task, got %s", rec.Model)
+	}
+	if rec.ReasoningSetting != "GPT reasoning level: medium" {
+		t.Fatalf("expected reasoning boost, got %q", rec.ReasoningSetting)
+	}
+}
+
+func TestPreferenceDoesNotOverrideHighRiskComplexity(t *testing.T) {
+	rec := RecommendWithPreference("analyze a production authentication incident", PreferCost)
+
+	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: high" {
+		t.Fatalf("expected high-risk task to keep high-quality recommendation, got %+v", rec)
+	}
+}
+
+func TestParsePreferenceRejectsEmptyOrUnsupportedValues(t *testing.T) {
+	for _, value := range []string{"", "cheap", "fastest"} {
+		if _, ok := ParsePreference(value); ok {
+			t.Fatalf("expected %q to be rejected", value)
+		}
+	}
+}
+
 func TestFormatContainsOneRecommendationOnly(t *testing.T) {
 	out := Format(Recommendation{Model: Opus48, ReasoningSetting: "Anthropic Effort Level: high", Reason: "Useful for demanding analysis."})
 

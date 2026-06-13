@@ -18,6 +18,16 @@ Reasoning: GPT reasoning level: high
 Reason: Best fit for complex or high-risk work where stronger reasoning is worth the extra cost.
 ```
 
+## Preference flags
+
+Use `--prefer quality`, `--prefer cost`, or `--prefer speed` to bias the recommendation when the task traits support it:
+
+```sh
+go run ./cmd/wayfinder --prefer cost "implement a small Go API endpoint"
+```
+
+Preferences do not blindly override complexity or risk. For example, high-risk tasks still receive stronger reasoning even with `--prefer cost` or `--prefer speed`.
+
 ## Supported v1 candidates
 
 - GPT 5.4

@@ -19,8 +19,38 @@ type Recommendation struct {
 	Reason           string
 }
 
+// Preference is a simple recommendation bias requested by the developer.
+type Preference string
+
+const (
+	PreferNone    Preference = ""
+	PreferQuality Preference = "quality"
+	PreferCost    Preference = "cost"
+	PreferSpeed   Preference = "speed"
+)
+
+// ParsePreference validates a --prefer value.
+func ParsePreference(value string) (Preference, bool) {
+	switch Preference(strings.ToLower(strings.TrimSpace(value))) {
+	case PreferQuality:
+		return PreferQuality, true
+	case PreferCost:
+		return PreferCost, true
+	case PreferSpeed:
+		return PreferSpeed, true
+	default:
+		return PreferNone, false
+	}
+}
+
 // Recommend returns one offline, rules-based recommendation for a natural-language task.
 func Recommend(task string) Recommendation {
+	return RecommendWithPreference(task, PreferNone)
+}
+
+// RecommendWithPreference returns one recommendation, optionally biased toward quality, cost, or speed.
+// Preferences influence the choice only when the task traits make that bias appropriate.
+func RecommendWithPreference(task string, preference Preference) Recommendation {
 	traits := classify(task)
 
 	switch {
@@ -28,25 +58,32 @@ func Recommend(task string) Recommendation {
 		return Recommendation{
 			Model:            GPT55,
 			ReasoningSetting: "GPT reasoning level: high",
-			Reason:           "Best fit for complex or high-risk work where stronger reasoning is worth the extra cost.",
+			Reason:           "Best fit for complex or high-risk work where stronger reasoning is worth the extra cost; preference does not override the task's risk.",
 		}
 	case traits.largeContext || traits.coding:
-		return Recommendation{
-			Model:            GPT55,
-			ReasoningSetting: "GPT reasoning level: low",
-			Reason:           "Good balance for development work where stronger model capability at low reasoning is likely cheaper than a medium-effort Sonnet run.",
+		switch preference {
+		case PreferQuality:
+			return Recommendation{Model: GPT55, ReasoningSetting: "GPT reasoning level: medium", Reason: "Quality preference raises reasoning for development work while avoiding the highest-cost setting."}
+		case PreferCost:
+			return Recommendation{Model: GPT54, ReasoningSetting: "GPT reasoning level: medium", Reason: "Cost preference chooses a lower-cost model because the task looks moderate rather than high-risk."}
+		case PreferSpeed:
+			return Recommendation{Model: GPT55, ReasoningSetting: "GPT reasoning level: low", Reason: "Speed preference keeps stronger coding capability while avoiding higher reasoning because the task is not high-risk or deeply complex."}
+		default:
+			return Recommendation{Model: GPT55, ReasoningSetting: "GPT reasoning level: low", Reason: "Good balance for development work where stronger model capability at low reasoning is likely cheaper than a medium-effort Sonnet run."}
 		}
 	case traits.simple:
-		return Recommendation{
-			Model:            GPT54,
-			ReasoningSetting: "GPT reasoning level: low",
-			Reason:           "A lower-cost choice is adequate for a simple, low-risk task.",
+		switch preference {
+		case PreferQuality:
+			return Recommendation{Model: GPT54, ReasoningSetting: "GPT reasoning level: medium", Reason: "Quality preference adds reasoning depth, but the simple task does not justify a highest-cost model."}
+		default:
+			return Recommendation{Model: GPT54, ReasoningSetting: "GPT reasoning level: low", Reason: "A lower-cost, fast choice is adequate for a simple, low-risk task."}
 		}
 	default:
-		return Recommendation{
-			Model:            GPT54,
-			ReasoningSetting: "GPT reasoning level: medium",
-			Reason:           "Conservative default for an ambiguous task: enough reasoning for unclear work while keeping total token cost below a medium-effort Sonnet run.",
+		switch preference {
+		case PreferSpeed, PreferCost:
+			return Recommendation{Model: GPT54, ReasoningSetting: "GPT reasoning level: low", Reason: "The task is ambiguous but not complex, so the preference favors a lower-cost, faster setting."}
+		default:
+			return Recommendation{Model: GPT54, ReasoningSetting: "GPT reasoning level: medium", Reason: "Conservative default for an ambiguous task: enough reasoning for unclear work while keeping total token cost below a medium-effort Sonnet run."}
 		}
 	}
 }
