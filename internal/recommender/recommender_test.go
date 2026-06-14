@@ -236,12 +236,56 @@ func TestParsePreferenceRejectsEmptyOrUnsupportedValues(t *testing.T) {
 func TestFormatContainsOneRecommendationOnly(t *testing.T) {
 	out := Format(Recommendation{Model: Opus48, ReasoningSetting: "Anthropic Effort Level: high", Reason: "Useful for demanding analysis."})
 
+	assertHumanOnlyOutput(t, out)
+}
+
+func TestBuiltInRecommendationsStayWithinHumanOnlyOutputGuardrails(t *testing.T) {
+	tasks := []string{
+		"fix a typo in a README",
+		"rewrite this support reply to be firm but empathetic",
+		"implement a Go API endpoint",
+		"debug an intermittent distributed race condition in production",
+		"summarize a long document into a research brief",
+		"analyze a long document and explain complex market analysis tradeoffs",
+		"help me with this task",
+	}
+	preferences := []Preference{PreferNone, PreferQuality, PreferCost, PreferSpeed}
+
+	for _, task := range tasks {
+		for _, preference := range preferences {
+			out := Format(RecommendWithPreference(task, preference))
+			assertHumanOnlyOutput(t, out)
+		}
+	}
+}
+
+func assertHumanOnlyOutput(t *testing.T, out string) {
+	t.Helper()
+
+	trimmed := strings.TrimSpace(out)
+	lines := strings.Split(trimmed, "\n")
+	if len(lines) != 3 {
+		t.Fatalf("expected compact three-line output, got %d lines in %q", len(lines), out)
+	}
 	for _, label := range []string{"Model:", "Reasoning:", "Reason:"} {
 		if count := strings.Count(out, label); count != 1 {
 			t.Fatalf("expected %s once, got %d in %q", label, count, out)
 		}
 	}
-	if strings.Contains(out, "API key") || strings.Contains(out, "provider credentials") {
-		t.Fatalf("output should not ask for provider setup: %q", out)
+	if !strings.HasPrefix(lines[0], "Model: ") || !strings.HasPrefix(lines[1], "Reasoning: ") || !strings.HasPrefix(lines[2], "Reason: ") {
+		t.Fatalf("output should directly answer with model, reasoning, and reason lines: %q", out)
+	}
+
+	lower := strings.ToLower(out)
+	for _, forbidden := range []string{
+		"```", "{", "}", "[", "]", "|",
+		"ranked", "ranking", "option 1", "option 2", "alternative", "runner-up",
+		"benchmark", "benchmarks", "latency table", "leaderboard", "live pricing", "current price",
+		"$", "per token", "per 1k", "per 1m", "token cost", "exact cost",
+		"api key", "credential", "provider setup", "set up an account", "export ",
+	} {
+		if strings.Contains(lower, forbidden) {
+			t.Fatalf("output contains forbidden guardrail term %q: %q", forbidden, out)
+		}
 	}
 }
