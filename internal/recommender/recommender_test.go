@@ -76,6 +76,93 @@ func TestRecommendCodingTaskAvoidsMediumEffortSonnetDefault(t *testing.T) {
 	}
 }
 
+func TestAnthropicRecommendationsUseEffortLevelTerminology(t *testing.T) {
+	cases := []struct {
+		name       string
+		task       string
+		preference Preference
+		wantModel  string
+		wantEffort string
+	}{
+		{
+			name:       "sonnet default",
+			task:       "summarize a long document into a research brief",
+			preference: PreferNone,
+			wantModel:  Sonnet46,
+			wantEffort: "Anthropic Effort Level: medium",
+		},
+		{
+			name:       "opus quality",
+			task:       "summarize a long document into a research brief",
+			preference: PreferQuality,
+			wantModel:  Opus48,
+			wantEffort: "Anthropic Effort Level: medium",
+		},
+		{
+			name:       "opus complex",
+			task:       "analyze a long document and explain complex market analysis tradeoffs",
+			preference: PreferSpeed,
+			wantModel:  Opus48,
+			wantEffort: "Anthropic Effort Level: high",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := RecommendWithPreference(tc.task, tc.preference)
+			out := Format(rec)
+
+			if rec.Model != tc.wantModel || rec.ReasoningSetting != tc.wantEffort {
+				t.Fatalf("expected %s with %q, got %+v", tc.wantModel, tc.wantEffort, rec)
+			}
+			if strings.Contains(out, "GPT reasoning level") || strings.Contains(strings.ToLower(out), "equivalent terminology") || strings.Contains(strings.ToLower(out), "stronger reasoning") {
+				t.Fatalf("Anthropic output used incorrect terminology: %q", out)
+			}
+		})
+	}
+}
+
+func TestProviderTerminologyMatchesSelectedModelFamily(t *testing.T) {
+	cases := []Recommendation{
+		RecommendWithPreference("fix a typo in a README", PreferQuality),
+		RecommendWithPreference("implement a Go API endpoint", PreferQuality),
+		RecommendWithPreference("summarize a long document into a research brief", PreferCost),
+		RecommendWithPreference("analyze a long document and explain complex research tradeoffs", PreferQuality),
+		RecommendWithPreference("debug an intermittent distributed race condition", PreferSpeed),
+	}
+
+	for _, rec := range cases {
+		out := Format(rec)
+		switch providerForModel(rec.Model) {
+		case providerGPT:
+			if !strings.Contains(out, "Reasoning: GPT reasoning level:") || strings.Contains(out, "Anthropic Effort Level") || strings.Contains(strings.ToLower(out), "effort") {
+				t.Fatalf("GPT output used incorrect terminology: %+v\n%s", rec, out)
+			}
+		case providerAnthropic:
+			if !strings.Contains(out, "Reasoning: Anthropic Effort Level:") || strings.Contains(out, "GPT reasoning level") {
+				t.Fatalf("Anthropic output used incorrect terminology: %+v\n%s", rec, out)
+			}
+		default:
+			t.Fatalf("unsupported model: %s", rec.Model)
+		}
+	}
+}
+
+func TestProviderForModelClassifiesSupportedFamilies(t *testing.T) {
+	cases := map[string]providerFamily{
+		GPT54:    providerGPT,
+		GPT55:    providerGPT,
+		Opus48:   providerAnthropic,
+		Sonnet46: providerAnthropic,
+	}
+
+	for model, want := range cases {
+		if got := providerForModel(model); got != want {
+			t.Fatalf("providerForModel(%q) = %q, want %q", model, got, want)
+		}
+	}
+}
+
 func TestRecommendComplexDevelopmentTaskRaisesReasoning(t *testing.T) {
 	rec := Recommend("debug an intermittent distributed race condition in production")
 
