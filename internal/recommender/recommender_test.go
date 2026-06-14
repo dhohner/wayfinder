@@ -19,7 +19,7 @@ func TestRecommendReturnsOneSupportedModelAndProviderSetting(t *testing.T) {
 	}
 }
 
-func TestRecommendSimpleTaskCanUseLowerCostCandidate(t *testing.T) {
+func TestRecommendSimpleTaskCanUseLowReasoningGPT55(t *testing.T) {
 	cases := []string{
 		"summarize these release notes",
 		"fix a typo in a README",
@@ -29,8 +29,8 @@ func TestRecommendSimpleTaskCanUseLowerCostCandidate(t *testing.T) {
 	for _, task := range cases {
 		rec := Recommend(task)
 
-		if rec.Model != GPT54 {
-			t.Fatalf("expected %s for %q, got %s", GPT54, task, rec.Model)
+		if rec.Model != GPT55 {
+			t.Fatalf("expected %s for %q, got %s", GPT55, task, rec.Model)
 		}
 		if rec.ReasoningSetting != "GPT reasoning level: low" {
 			t.Fatalf("expected low reasoning for %q, got %q", task, rec.ReasoningSetting)
@@ -38,7 +38,7 @@ func TestRecommendSimpleTaskCanUseLowerCostCandidate(t *testing.T) {
 	}
 }
 
-func TestRecommendNuancedRoutineTaskUsesGPT55LowReasoning(t *testing.T) {
+func TestRecommendNuancedRoutineTaskUsesGPT55MediumReasoning(t *testing.T) {
 	cases := []string{
 		"rewrite this support reply to be firm but empathetic",
 		"extract requirements from a messy product request",
@@ -48,8 +48,8 @@ func TestRecommendNuancedRoutineTaskUsesGPT55LowReasoning(t *testing.T) {
 	for _, task := range cases {
 		rec := Recommend(task)
 
-		if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: low" {
-			t.Fatalf("expected low-reasoning GPT 5.5 for %q, got %+v", task, rec)
+		if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: medium" {
+			t.Fatalf("expected medium-reasoning GPT 5.5 for %q, got %+v", task, rec)
 		}
 	}
 }
@@ -57,8 +57,8 @@ func TestRecommendNuancedRoutineTaskUsesGPT55LowReasoning(t *testing.T) {
 func TestRecommendAmbiguousTaskUsesConservativeOfflineDefault(t *testing.T) {
 	rec := Recommend("help me with this task")
 
-	if rec.Model != GPT54 {
-		t.Fatalf("expected conservative default %s, got %s", GPT54, rec.Model)
+	if rec.Model != GPT55 {
+		t.Fatalf("expected conservative default %s, got %s", GPT55, rec.Model)
 	}
 	if rec.ReasoningSetting != "GPT reasoning level: medium" {
 		t.Fatalf("expected GPT medium reasoning, got %q", rec.ReasoningSetting)
@@ -71,8 +71,8 @@ func TestRecommendCodingTaskAvoidsMediumEffortSonnetDefault(t *testing.T) {
 	if rec.Model != GPT55 {
 		t.Fatalf("expected %s, got %s", GPT55, rec.Model)
 	}
-	if rec.ReasoningSetting != "GPT reasoning level: low" {
-		t.Fatalf("expected GPT low reasoning, got %q", rec.ReasoningSetting)
+	if rec.ReasoningSetting != "GPT reasoning level: medium" {
+		t.Fatalf("expected GPT medium reasoning, got %q", rec.ReasoningSetting)
 	}
 }
 
@@ -85,10 +85,10 @@ func TestAnthropicRecommendationsUseEffortLevelTerminology(t *testing.T) {
 		wantEffort string
 	}{
 		{
-			name:       "sonnet default",
+			name:       "opus default",
 			task:       "summarize a long document into a research brief",
 			preference: PreferNone,
-			wantModel:  Sonnet46,
+			wantModel:  Opus48,
 			wantEffort: "Anthropic Effort Level: medium",
 		},
 		{
@@ -96,14 +96,14 @@ func TestAnthropicRecommendationsUseEffortLevelTerminology(t *testing.T) {
 			task:       "summarize a long document into a research brief",
 			preference: PreferQuality,
 			wantModel:  Opus48,
-			wantEffort: "Anthropic Effort Level: medium",
+			wantEffort: "Anthropic Effort Level: high",
 		},
 		{
-			name:       "opus complex",
-			task:       "analyze a long document and explain complex market analysis tradeoffs",
-			preference: PreferSpeed,
+			name:       "opus visual design",
+			task:       "review this visual design mockup and improve typography",
+			preference: PreferNone,
 			wantModel:  Opus48,
-			wantEffort: "Anthropic Effort Level: high",
+			wantEffort: "Anthropic Effort Level: medium",
 		},
 	}
 
@@ -177,43 +177,43 @@ func TestPreferQualityRaisesReasoningWhenTraitsJustifyIt(t *testing.T) {
 	if rec.Model != GPT55 {
 		t.Fatalf("expected stronger model %s, got %s", GPT55, rec.Model)
 	}
-	if rec.ReasoningSetting != "GPT reasoning level: medium" {
+	if rec.ReasoningSetting != "GPT reasoning level: high" {
 		t.Fatalf("expected quality bias to raise reasoning, got %q", rec.ReasoningSetting)
 	}
 }
 
-func TestPreferCostCanChooseLowerCostForModerateTask(t *testing.T) {
+func TestPreferCostKeepsDefaultModelForModerateTask(t *testing.T) {
 	rec := RecommendWithPreference("implement a Go API endpoint", PreferCost)
 
-	if rec.Model != GPT54 {
-		t.Fatalf("expected lower-cost %s, got %s", GPT54, rec.Model)
+	if rec.Model != GPT55 {
+		t.Fatalf("expected default model %s, got %s", GPT55, rec.Model)
 	}
 }
 
-func TestPreferSpeedLowersReasoningWhenTaskIsNotComplex(t *testing.T) {
+func TestPreferSpeedKeepsConservativeReasoningForAmbiguousTask(t *testing.T) {
 	rec := RecommendWithPreference("help me with this task", PreferSpeed)
 
-	if rec.Model != GPT54 || rec.ReasoningSetting != "GPT reasoning level: low" {
-		t.Fatalf("expected fast low-reasoning GPT 5.4, got %+v", rec)
+	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: medium" {
+		t.Fatalf("expected medium-reasoning GPT 5.5, got %+v", rec)
 	}
 }
 
 func TestPreferSpeedKeepsCodingCapabilityForModerateCodingTask(t *testing.T) {
 	rec := RecommendWithPreference("implement a Go API endpoint", PreferSpeed)
 
-	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: low" {
-		t.Fatalf("expected speed preference to keep low-reasoning GPT 5.5 for coding, got %+v", rec)
+	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: medium" {
+		t.Fatalf("expected speed preference to keep medium-reasoning GPT 5.5 for coding, got %+v", rec)
 	}
 }
 
 func TestPreferQualityDoesNotAlwaysSelectHighestCost(t *testing.T) {
 	rec := RecommendWithPreference("summarize these release notes", PreferQuality)
 
-	if rec.Model != GPT54 {
-		t.Fatalf("expected quality preference to keep cheaper model for simple task, got %s", rec.Model)
+	if rec.Model != GPT55 {
+		t.Fatalf("expected quality preference to keep GPT 5.5 for simple task, got %s", rec.Model)
 	}
-	if rec.ReasoningSetting != "GPT reasoning level: medium" {
-		t.Fatalf("expected reasoning boost, got %q", rec.ReasoningSetting)
+	if rec.ReasoningSetting != "GPT reasoning level: low" {
+		t.Fatalf("expected low reasoning for simple task, got %q", rec.ReasoningSetting)
 	}
 }
 
@@ -222,6 +222,55 @@ func TestPreferenceDoesNotOverrideHighRiskComplexity(t *testing.T) {
 
 	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: high" {
 		t.Fatalf("expected high-risk task to keep high-quality recommendation, got %+v", rec)
+	}
+}
+
+func TestPreferQualityUsesXHighForHighRiskOrComplexTasks(t *testing.T) {
+	cases := []string{
+		"analyze a production authentication incident",
+		"debug a complex distributed concurrency issue",
+	}
+
+	for _, task := range cases {
+		rec := RecommendWithPreference(task, PreferQuality)
+		if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: xhigh" {
+			t.Fatalf("expected xhigh GPT 5.5 for %q, got %+v", task, rec)
+		}
+	}
+}
+
+func TestBuiltInRulesDoNotRecommendDeprecatedDefaultModels(t *testing.T) {
+	tasks := []string{
+		"fix a typo in a README",
+		"implement a Go API endpoint",
+		"help me with this task",
+		"summarize a long document into a research brief",
+		"review this visual design mockup and improve typography",
+	}
+	preferences := []Preference{PreferNone, PreferQuality, PreferCost, PreferSpeed}
+
+	for _, task := range tasks {
+		for _, preference := range preferences {
+			rec := RecommendWithPreference(task, preference)
+			if rec.Model == GPT54 || rec.Model == Sonnet46 {
+				t.Fatalf("did not expect %s for %q with preference %q: %+v", rec.Model, task, preference, rec)
+			}
+		}
+	}
+}
+
+func TestClassifierUsesTermBoundariesForShortKeywords(t *testing.T) {
+	if classify("write an author bio").highRisk {
+		t.Fatal("did not expect auth inside author to classify as high risk")
+	}
+	if classify("write a goal statement").coding {
+		t.Fatal("did not expect go inside goal to classify as Go coding work")
+	}
+	if !classify("refactor a Go API auth module").coding {
+		t.Fatal("expected standalone Go/API keywords to classify as coding")
+	}
+	if !classify("refactor a Go API auth module").highRisk {
+		t.Fatal("expected standalone auth keyword to classify as high risk")
 	}
 }
 

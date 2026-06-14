@@ -44,7 +44,7 @@ func TestCLIOutputReflectsTaskComplexity(t *testing.T) {
 		{
 			name: "simple",
 			task: "fix a typo in a README",
-			want: []string{"Model: GPT 5.4", "Reasoning: GPT reasoning level: low"},
+			want: []string{"Model: GPT 5.5", "Reasoning: GPT reasoning level: low"},
 		},
 		{
 			name: "complex",
@@ -54,7 +54,7 @@ func TestCLIOutputReflectsTaskComplexity(t *testing.T) {
 		{
 			name: "ambiguous",
 			task: "help me with this task",
-			want: []string{"Model: GPT 5.4", "Reasoning: GPT reasoning level: medium", "Conservative default"},
+			want: []string{"Model: GPT 5.5", "Reasoning: GPT reasoning level: medium", "Conservative default"},
 		},
 	}
 
