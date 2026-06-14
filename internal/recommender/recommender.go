@@ -1,9 +1,6 @@
 package recommender
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
 const (
 	// GPT54 and Sonnet46 remain supported for provider classification, but built-in
@@ -53,102 +50,60 @@ func ParsePreference(value string) (Preference, bool) {
 	}
 }
 
+// Service evaluates task descriptions against configured recommendation rules.
+// It is immutable after construction and safe to reuse across requests.
+type Service struct {
+	rules                 []recommendationRule
+	defaultRecommendation Recommendation
+}
+
+// NewService returns a recommender using Wayfinder's bundled offline rules.
+func NewService() Service {
+	return Service{
+		rules:                 append([]recommendationRule(nil), defaultRules...),
+		defaultRecommendation: defaultRecommendation(),
+	}
+}
+
 // Recommend returns one offline, rules-based recommendation for a natural-language task.
 func Recommend(task string) Recommendation {
-	return RecommendWithPreference(task, PreferNone)
+	return NewService().Recommend(task)
+}
+
+// RecommendWithPreference returns one recommendation, optionally biased toward quality, cost, or speed.
+func RecommendWithPreference(task string, preference Preference) Recommendation {
+	return NewService().RecommendWithPreference(task, preference)
+}
+
+// Recommend returns one offline, rules-based recommendation for a natural-language task.
+func (s Service) Recommend(task string) Recommendation {
+	return s.RecommendWithPreference(task, PreferNone)
 }
 
 // RecommendWithPreference returns one recommendation, optionally biased toward quality, cost, or speed.
 // Preferences are soft hints: they influence the choice only when the task traits
 // make that bias appropriate, and they never downgrade high-risk or complex work.
-func RecommendWithPreference(task string, preference Preference) Recommendation {
+func (s Service) RecommendWithPreference(task string, preference Preference) Recommendation {
 	traits := classify(task)
+	rules := s.rules
+	if rules == nil {
+		rules = defaultRules
+	}
 
-	for _, rule := range recommendationRules {
+	for _, rule := range rules {
 		if rule.matches(traits) {
 			return rule.recommend(preference)
 		}
 	}
 
+	if s.defaultRecommendation == (Recommendation{}) {
+		return defaultRecommendation()
+	}
+	return s.defaultRecommendation
+}
+
+func defaultRecommendation() Recommendation {
 	return gptRecommendation(GPT55, "medium", "Conservative default for an ambiguous task: enough reasoning for unclear work.")
-}
-
-type recommendationRule struct {
-	matches   func(taskTraits) bool
-	recommend func(Preference) Recommendation
-}
-
-var recommendationRules = []recommendationRule{
-	{matches: func(traits taskTraits) bool { return traits.highRisk }, recommend: recommendHighRisk},
-	{matches: func(traits taskTraits) bool { return traits.deepReasoning }, recommend: recommendDeepReasoning},
-	{matches: func(traits taskTraits) bool { return traits.anthropicFit || traits.visualDesign }, recommend: recommendAnthropicFit},
-	{matches: func(traits taskTraits) bool { return traits.nuancedRoutine && !traits.coding }, recommend: recommendNuancedRoutine},
-	{matches: func(traits taskTraits) bool { return traits.simple && !traits.largeContext }, recommend: recommendSimple},
-	{matches: func(traits taskTraits) bool { return traits.largeContext || traits.coding }, recommend: recommendDevelopmentOrLargeContext},
-}
-
-func recommendHighRisk(preference Preference) Recommendation {
-	if preference == PreferQuality {
-		return gptRecommendation(GPT55, "xhigh", "Best fit for high-risk work where maximum reasoning quality is worth the extra cost.")
-	}
-	return gptRecommendation(GPT55, "high", "Best fit for high-risk work where stronger reasoning is worth the extra cost; preference does not override the task's risk.")
-}
-
-func recommendDeepReasoning(preference Preference) Recommendation {
-	if preference == PreferQuality {
-		return gptRecommendation(GPT55, "xhigh", "Best fit for complex work where maximum reasoning quality is worth the extra cost.")
-	}
-	return gptRecommendation(GPT55, "high", "Best fit for complex work where stronger reasoning is worth the extra cost; preference does not override the task's complexity.")
-}
-
-func recommendAnthropicFit(preference Preference) Recommendation {
-	switch preference {
-	case PreferQuality:
-		return anthropicRecommendation(Opus48, "high", "Quality preference chooses Opus for long-form, creative, or visual design work where nuance matters.")
-	case PreferCost, PreferSpeed:
-		return gptRecommendation(GPT55, "medium", "Cost or speed preference favors the stronger default while keeping enough reasoning for nuanced work.")
-	default:
-		return anthropicRecommendation(Opus48, "medium", "Good fit for long-form, creative, or visual design work where Opus capability is useful.")
-	}
-}
-
-func recommendNuancedRoutine(preference Preference) Recommendation {
-	if preference == PreferQuality {
-		return gptRecommendation(GPT55, "high", "Quality preference adds reasoning depth for a nuanced routine task.")
-	}
-	return gptRecommendation(GPT55, "medium", "Good default for messy input, nuance, or multiple simple constraints.")
-}
-
-func recommendSimple(Preference) Recommendation {
-	return gptRecommendation(GPT55, "low", "A fast, lower-reasoning GPT 5.5 choice is adequate for a simple, low-risk task.")
-}
-
-func recommendDevelopmentOrLargeContext(preference Preference) Recommendation {
-	if preference == PreferQuality {
-		return gptRecommendation(GPT55, "high", "Quality preference raises reasoning for development work while avoiding the maximum-cost setting.")
-	}
-	return gptRecommendation(GPT55, "medium", "Good default for moderate development or larger-context work.")
-}
-
-// Format renders the v1 human-facing output contract: one model, one setting, one reason.
-func Format(rec Recommendation) string {
-	return fmt.Sprintf("Model: %s\nReasoning: %s\nReason: %s", rec.Model, rec.ReasoningSetting, rec.Reason)
-}
-
-func gptRecommendation(model, level, reason string) Recommendation {
-	return Recommendation{
-		Model:            model,
-		ReasoningSetting: "GPT reasoning level: " + level,
-		Reason:           reason,
-	}
-}
-
-func anthropicRecommendation(model, level, reason string) Recommendation {
-	return Recommendation{
-		Model:            model,
-		ReasoningSetting: "Anthropic Effort Level: " + level,
-		Reason:           reason,
-	}
 }
 
 func providerForModel(model string) providerFamily {
@@ -160,67 +115,4 @@ func providerForModel(model string) providerFamily {
 	default:
 		return providerUnknown
 	}
-}
-
-type taskTraits struct {
-	simple         bool
-	coding         bool
-	largeContext   bool
-	anthropicFit   bool
-	visualDesign   bool
-	nuancedRoutine bool
-	deepReasoning  bool
-	highRisk       bool
-}
-
-func classify(task string) taskTraits {
-	text := strings.ToLower(task)
-	return taskTraits{
-		simple:         hasAny(text, "summarize", "summary", "rewrite", "proofread", "format", "extract", "release notes", "short email", "typo", "readme", "rename", "one-line", "small", "minor", "lint", "comment", "documentation"),
-		coding:         hasAny(text, "code", "coding", "implement", "refactor", "debug", "test", "typescript", "golang", "go", "python", "api", "module", "bug", "endpoint", "function"),
-		largeContext:   hasAny(text, "large", "long", "many files", "repository", "repo", "codebase", "migration", "cross-service", "multi-service", "10-page", "10 page"),
-		anthropicFit:   hasAny(text, "long document", "long-form", "longform", "essay", "narrative", "manuscript", "policy brief", "research brief", "research report", "market analysis", "literature review", "creative writing", "story", "tone", "voice"),
-		visualDesign:   hasAny(text, "visual design", "ui design", "ux design", "interface design", "interaction design", "design system", "mockup", "wireframe", "prototype", "layout", "typography", "color palette", "brand", "branding"),
-		nuancedRoutine: hasAny(text, "messy", "inconsistent", "nuanced", "firm but empathetic", "preserve intent", "multiple constraints", "overlap", "overlapping", "edge case", "requirements", "product request", "project plan", "meeting notes", "support reply", "policy"),
-		deepReasoning:  hasAny(text, "architecture", "system design", "distributed", "intermittent", "root cause", "tradeoff", "complex", "race condition", "concurrency", "performance", "scalability"),
-		highRisk:       hasAny(text, "security", "auth", "authentication", "payment", "billing", "production", "data loss", "incident", "compliance", "privacy", "encryption", "permissions"),
-	}
-}
-
-func hasAny(text string, needles ...string) bool {
-	for _, needle := range needles {
-		if containsTerm(text, needle) {
-			return true
-		}
-	}
-	return false
-}
-
-func containsTerm(text, needle string) bool {
-	needle = strings.TrimSpace(needle)
-	if needle == "" {
-		return false
-	}
-
-	for start := strings.Index(text, needle); start >= 0; {
-		end := start + len(needle)
-		if hasBoundary(text, start-1) && hasBoundary(text, end) {
-			return true
-		}
-
-		next := strings.Index(text[start+1:], needle)
-		if next < 0 {
-			return false
-		}
-		start += next + 1
-	}
-	return false
-}
-
-func hasBoundary(text string, index int) bool {
-	if index < 0 || index >= len(text) {
-		return true
-	}
-	c := text[index]
-	return !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
 }

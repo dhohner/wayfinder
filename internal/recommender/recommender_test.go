@@ -65,6 +65,16 @@ func TestRecommendAmbiguousTaskUsesConservativeOfflineDefault(t *testing.T) {
 	}
 }
 
+func TestZeroValueServiceUsesBundledDefaults(t *testing.T) {
+	var svc Service
+
+	rec := svc.Recommend("help me with this task")
+
+	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: medium" {
+		t.Fatalf("expected zero-value service to use bundled defaults, got %+v", rec)
+	}
+}
+
 func TestRecommendCodingTaskAvoidsMediumEffortSonnetDefault(t *testing.T) {
 	rec := Recommend("implement a Go API endpoint")
 
