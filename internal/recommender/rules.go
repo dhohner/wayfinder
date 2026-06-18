@@ -72,7 +72,27 @@ func recommendCoding(optimization Optimization, traits taskTraits) Recommendatio
 		return recommendSimple(optimization, traits)
 	}
 
-	return recommendGPTReviewOrCoding(optimization, "coding")
+	if isHighReasoningCoding(traits) {
+		return recommendGPTReviewOrCoding(optimization, "coding")
+	}
+
+	return recommendRoutineCoding(optimization)
+}
+
+func recommendRoutineCoding(optimization Optimization) Recommendation {
+	if optimization == OptimizeQuality {
+		return gptRecommendation(GPT55, "high", "Quality optimization adds stronger reasoning for routine coding work without using the maximum setting.")
+	}
+	return gptRecommendation(GPT55, "medium", "Good value choice for routine coding work without clear high-risk or deep-reasoning signals.")
+}
+
+func isHighReasoningCoding(traits taskTraits) bool {
+	// Model-selection and classifier work often names high-risk or complex domains
+	// as examples. Treat that meta work as routine unless another rule captures it.
+	if traits.modelSelection {
+		return false
+	}
+	return traits.highRisk || traits.deepReasoning || traits.correctnessHeavy || (traits.largeContext && !traits.routineCoding)
 }
 
 func recommendCodeReview(optimization Optimization, traits taskTraits) Recommendation {
@@ -129,5 +149,5 @@ func recommendDevelopmentOrLargeContext(optimization Optimization, _ taskTraits)
 }
 
 func isSimpleCoding(traits taskTraits) bool {
-	return traits.simple && !traits.largeContext && !traits.deepReasoning && !traits.highRisk && !traits.nuancedRoutine && !traits.correctnessHeavy
+	return traits.simple && !traits.routineCoding && !traits.largeContext && !traits.deepReasoning && !traits.highRisk && !traits.nuancedRoutine && !traits.correctnessHeavy
 }

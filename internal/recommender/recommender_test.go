@@ -76,14 +76,14 @@ func TestZeroValueServiceUsesBundledDefaults(t *testing.T) {
 	}
 }
 
-func TestRecommendCodingTaskUsesBenchmarkValueDefault(t *testing.T) {
+func TestRecommendRoutineCodingTaskUsesMediumValueDefault(t *testing.T) {
 	rec := Recommend("implement a Go API endpoint")
 
 	if rec.Model != GPT55 {
 		t.Fatalf("expected %s, got %s", GPT55, rec.Model)
 	}
-	if rec.ReasoningSetting != "GPT reasoning level: high" {
-		t.Fatalf("expected GPT high reasoning, got %q", rec.ReasoningSetting)
+	if rec.ReasoningSetting != "GPT reasoning level: medium" {
+		t.Fatalf("expected GPT medium reasoning, got %q", rec.ReasoningSetting)
 	}
 }
 
@@ -100,8 +100,8 @@ Acceptance criteria:
 
 	rec := Recommend(task)
 
-	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: high" {
-		t.Fatalf("expected substantive coding path for implementation issue, got %+v", rec)
+	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: medium" {
+		t.Fatalf("expected routine coding path for implementation issue, got %+v", rec)
 	}
 }
 
@@ -261,14 +261,14 @@ func TestRecommendComplexDevelopmentTaskRaisesReasoning(t *testing.T) {
 	}
 }
 
-func TestOptimizeQualityRaisesCodingToXHigh(t *testing.T) {
+func TestOptimizeQualityRaisesRoutineCodingToHigh(t *testing.T) {
 	rec := RecommendWithOptimization("implement a Go API endpoint", OptimizeQuality)
 
 	if rec.Model != GPT55 {
 		t.Fatalf("expected stronger model %s, got %s", GPT55, rec.Model)
 	}
-	if rec.ReasoningSetting != "GPT reasoning level: xhigh" {
-		t.Fatalf("expected quality optimization to raise coding reasoning, got %q", rec.ReasoningSetting)
+	if rec.ReasoningSetting != "GPT reasoning level: high" {
+		t.Fatalf("expected quality optimization to raise routine coding reasoning, got %q", rec.ReasoningSetting)
 	}
 }
 
@@ -410,11 +410,11 @@ func TestCodingBenchmarkOptimizationMatrix(t *testing.T) {
 		optimization Optimization
 		want         string
 	}{
-		{"non-simple default", "implement a Go API endpoint", OptimizeValue, "GPT reasoning level: high"},
-		{"non-simple value", "implement a Go API endpoint", OptimizeValue, "GPT reasoning level: high"},
-		{"non-simple cost", "implement a Go API endpoint", OptimizeCost, "GPT reasoning level: medium"},
-		{"non-simple speed", "implement a Go API endpoint", OptimizeSpeed, "GPT reasoning level: medium"},
-		{"non-simple quality", "implement a Go API endpoint", OptimizeQuality, "GPT reasoning level: xhigh"},
+		{"routine default", "implement a Go API endpoint", OptimizeValue, "GPT reasoning level: medium"},
+		{"routine value", "implement a Go API endpoint", OptimizeValue, "GPT reasoning level: medium"},
+		{"routine cost", "implement a Go API endpoint", OptimizeCost, "GPT reasoning level: medium"},
+		{"routine speed", "implement a Go API endpoint", OptimizeSpeed, "GPT reasoning level: medium"},
+		{"routine quality", "implement a Go API endpoint", OptimizeQuality, "GPT reasoning level: high"},
 		{"simple value", "rename a variable in a small Go function", OptimizeValue, "GPT reasoning level: low"},
 		{"simple cost", "rename a variable in a small Go function", OptimizeCost, "GPT reasoning level: low"},
 		{"simple speed", "rename a variable in a small Go function", OptimizeSpeed, "GPT reasoning level: low"},
@@ -428,6 +428,34 @@ func TestCodingBenchmarkOptimizationMatrix(t *testing.T) {
 				t.Fatalf("expected %s with %s, got %+v", GPT55, tc.want, rec)
 			}
 		})
+	}
+}
+
+func TestRoutineCodingFeatureWorkUsesMediumReasoning(t *testing.T) {
+	cases := []string{
+		"tune visual design recommendations",
+		"add explain mode with benchmark rationale",
+		"add optimization modes for recommendations",
+		"add a --json CLI flag and write tests for normalized recommendation output",
+		"add explain mode with benchmark tradeoff formatting and CLI coverage",
+		"extract CLI runner and recommender service into focused packages with tests",
+		"broaden classifier signal coverage for examples like OAuth compliance, memory leak diagnosis, visual design, and brand voice editing",
+		"tune visual design recommendation rules so technical/system design prompts stay on the coding path",
+	}
+
+	for _, task := range cases {
+		rec := RecommendWithOptimization(task, OptimizeValue)
+		if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: medium" {
+			t.Fatalf("expected routine coding feature work to use medium reasoning for %q, got %+v", task, rec)
+		}
+	}
+}
+
+func TestCodeReviewFeatureImplementationIsNotClassifiedAsReview(t *testing.T) {
+	rec := RecommendWithOptimizationAgainst("add adversarial code review model selection and --against parsing", OptimizeValue, AgainstGPT)
+
+	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: medium" {
+		t.Fatalf("expected code-review feature implementation to stay on routine coding path, got %+v", rec)
 	}
 }
 

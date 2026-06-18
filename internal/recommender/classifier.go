@@ -15,6 +15,8 @@ type taskTraits struct {
 	deepReasoning    bool
 	highRisk         bool
 	correctnessHeavy bool
+	routineCoding    bool
+	modelSelection   bool
 	against          AgainstFamily
 }
 
@@ -23,15 +25,15 @@ var simpleSignals = []string{
 }
 
 var codingSignals = []string{
-	"code", "coding", "implement", "implementation", "refactor", "debug", "test", "typescript", "javascript", "react", "vue", "angular", "css", "html", "jsx", "tsx", "golang", "go", "python", "rust", "java", "sql", "api", "sdk", "cli", "module", "bug", "endpoint", "function", "class", "component", "frontend", "backend", "database", "schema", "query", "build", "deploy", "parser", "parse",
+	"code", "coding", "implement", "implementation", "refactor", "debug", "test", "typescript", "javascript", "react", "vue", "angular", "css", "html", "jsx", "tsx", "golang", "go", "python", "rust", "java", "sql", "api", "sdk", "cli", "json", "serialization", "serialize", "flag", "command-line", "classifier", "recommender", "module", "bug", "endpoint", "function", "class", "component", "frontend", "backend", "database", "schema", "query", "build", "deploy", "parser", "parse",
 }
 
 var codingIntentSignals = []string{
-	"code", "coding", "implement", "implementation", "refactor", "debug", "test", "typescript", "javascript", "react", "vue", "angular", "css", "html", "jsx", "tsx", "golang", "go", "python", "rust", "java", "sql", "api", "sdk", "cli", "module", "bug", "endpoint", "function", "class", "backend", "database", "schema", "query", "deploy", "parser", "parse",
+	"code", "coding", "implement", "implementation", "refactor", "debug", "test", "typescript", "javascript", "react", "vue", "angular", "css", "html", "jsx", "tsx", "golang", "go", "python", "rust", "java", "sql", "api", "sdk", "cli", "json", "serialization", "serialize", "flag", "command-line", "classifier", "recommender", "module", "bug", "endpoint", "function", "class", "backend", "database", "schema", "query", "deploy", "parser", "parse",
 }
 
 var largeContextSignals = []string{
-	"long", "many files", "multiple files", "whole repo", "entire repo", "repository", "repo", "codebase", "monorepo", "migration", "cross-service", "multi-service", "integration", "legacy", "10-page", "10 page", "thousands of lines",
+	"many files", "multiple files", "whole repo", "entire repo", "repository", "repo", "codebase", "monorepo", "migration", "cross-service", "multi-service", "integration", "legacy", "large file", "large files", "10-page", "10 page", "thousands of lines",
 }
 
 var codeReviewSignals = []string{
@@ -55,7 +57,7 @@ var nuancedRoutineSignals = []string{
 }
 
 var deepReasoningSignals = []string{
-	"architecture", "system design", "technical design", "software design", "engineering design", "distributed", "intermittent", "root cause", "tradeoff", "trade-off", "complex", "race condition", "concurrency", "deadlock", "performance", "scalability", "optimize", "profiling", "memory leak", "algorithm", "state machine", "data model", "investigate", "diagnose",
+	"architecture", "system design", "technical design", "software design", "engineering design", "distributed", "intermittent", "root cause", "complex", "race condition", "concurrency", "deadlock", "performance", "scalability", "optimize", "profiling", "memory leak", "algorithm", "state machine", "data model", "investigate", "diagnose",
 }
 
 var highRiskSignals = []string{
@@ -63,19 +65,34 @@ var highRiskSignals = []string{
 }
 
 var correctnessHeavySignals = []string{
-	"parse", "parser", "parsing", "typed comparison", "type comparison", "stable ordering", "stable sort", "edge case", "edge cases", "arbitrarily large", "large values", "big integer", "bignum", "precision", "precise", "lossless", "lossless precision", "required behavior", "current behavior", "preserve behavior", "guarantee", "guarantees", "rounding", "overflow",
+	"typed comparison", "type comparison", "stable ordering", "stable sort", "edge case", "edge cases", "arbitrarily large", "large values", "big integer", "bignum", "precision", "precise", "lossless", "lossless precision", "required behavior", "current behavior", "preserve behavior", "guarantee", "guarantees", "rounding", "overflow",
+}
+
+var routineCodingSignals = []string{
+	"cli", "command-line", "flag", "argument", "usage text", "json", "format", "formatting", "serialization", "serialize", "test", "tests", "coverage", "helper", "helpers", "wrapper", "runner", "service", "split", "extract", "reusable", "wire", "plumbing",
+}
+
+var modelSelectionSignals = []string{
+	"model selection", "recommendation", "recommendations", "recommender", "classifier", "classification", "signal", "signals", "rule", "rules", "benchmark", "reasoning level", "effort level", "optimization mode", "optimization modes", "model family", "provider terminology",
+}
+
+var modelSelectionCodingActionSignals = []string{
+	"add", "tune", "update", "change", "modify", "broaden", "narrow", "route", "select", "prefer", "default", "support", "classify", "implement", "refactor", "extract", "replace", "remove",
 }
 
 func classify(task string) taskTraits {
 	text := strings.ToLower(task)
 	correctnessHeavy := hasAny(text, correctnessHeavySignals...)
-	codingIntent := hasAny(text, codingIntentSignals...) || isCorrectnessHeavyCoding(text, correctnessHeavy)
+	modelSelection := hasAny(text, modelSelectionSignals...)
+	modelSelectionCoding := modelSelection && hasAny(text, modelSelectionCodingActionSignals...)
+	codingIntent := hasAny(text, codingIntentSignals...) || isCorrectnessHeavyCoding(text, correctnessHeavy) || modelSelectionCoding
 	coding := codingIntent || hasAny(text, codingSignals...)
+	routineCoding := coding && (modelSelection || hasAny(text, routineCodingSignals...))
 	return taskTraits{
 		simple:           hasAny(text, simpleSignals...),
 		coding:           coding,
 		codingIntent:     codingIntent,
-		codeReview:       isCodeReview(text, coding),
+		codeReview:       isCodeReview(text, coding, modelSelection),
 		largeContext:     hasAny(text, largeContextSignals...),
 		anthropicFit:     hasAny(text, anthropicFitSignals...),
 		visualDesign:     hasAny(text, visualDesignSignals...),
@@ -84,16 +101,30 @@ func classify(task string) taskTraits {
 		deepReasoning:    hasAny(text, deepReasoningSignals...),
 		highRisk:         hasAny(text, highRiskSignals...),
 		correctnessHeavy: correctnessHeavy,
+		routineCoding:    routineCoding,
+		modelSelection:   modelSelection,
 	}
 }
 
-func isCodeReview(text string, coding bool) bool {
+func isCodeReview(text string, coding bool, modelSelection bool) bool {
+	if modelSelection && isMetaCodeReviewFeature(text) {
+		return false
+	}
 	if hasAny(text, codeReviewSignals...) {
 		return true
 	}
 	return coding && hasAny(text, "review", "audit") && hasAny(text,
 		"code", "implementation", "pull request", "pr", "diff", "patch", "bug", "bugs", "module", "function", "class", "component", "endpoint", "repository", "repo", "codebase",
 		"typescript", "javascript", "golang", "go", "python", "rust", "java", "sql",
+	)
+}
+
+func isMetaCodeReviewFeature(text string) bool {
+	return hasAny(text,
+		"code review model selection", "code-review model selection", "code review recommendation", "code-review recommendation",
+		"code review task", "code-review task", "code review tasks", "code-review tasks",
+		"classify code review", "classify code-review", "route code review", "route code-review",
+		"review model family", "review frontier option", "--against", "against gpt", "against claude",
 	)
 }
 
