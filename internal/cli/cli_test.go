@@ -12,12 +12,14 @@ import (
 type stubRecommender struct {
 	task           string
 	optimization   recommender.Optimization
+	against        recommender.AgainstFamily
 	recommendation recommender.Recommendation
 }
 
-func (s *stubRecommender) RecommendWithOptimization(task string, optimization recommender.Optimization) recommender.Recommendation {
+func (s *stubRecommender) RecommendWithOptimizationAgainst(task string, optimization recommender.Optimization, against recommender.AgainstFamily) recommender.Recommendation {
 	s.task = task
 	s.optimization = optimization
+	s.against = against
 	if s.recommendation != (recommender.Recommendation{}) {
 		return s.recommendation
 	}
@@ -28,13 +30,13 @@ func TestRunParsesArgumentsAndWritesRecommendation(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	rec := &stubRecommender{}
 
-	exitCode := Run([]string{"--optimize=quality", "implement", "an", "API"}, &stdout, &stderr, rec)
+	exitCode := Run([]string{"--optimize=quality", "--against", "gpt", "implement", "an", "API"}, &stdout, &stderr, rec)
 
 	if exitCode != 0 {
 		t.Fatalf("expected success exit code, got %d: %s", exitCode, stderr.String())
 	}
-	if rec.optimization != recommender.OptimizeQuality || rec.task != "implement an API" {
-		t.Fatalf("unexpected recommendation input: optimization=%q task=%q", rec.optimization, rec.task)
+	if rec.optimization != recommender.OptimizeQuality || rec.against != recommender.AgainstGPT || rec.task != "implement an API" {
+		t.Fatalf("unexpected recommendation input: optimization=%q against=%q task=%q", rec.optimization, rec.against, rec.task)
 	}
 	assertContainsAll(t, stdout.String(), "Model: GPT 5.5", "Reasoning: GPT reasoning level: medium", "Reason: test recommendation")
 	assertNotContainsAny(t, stdout.String(), "Pass@1", "AIC", "AIC factor", "Benchmark:")
@@ -176,6 +178,10 @@ func TestRunRejectsInvalidArguments(t *testing.T) {
 		{"--optimize"},
 		{"--optimize", ""},
 		{"--optimize=cheap"},
+		{"--against"},
+		{"--against", "gemini", "task"},
+		{"--against="},
+		{"--against=gemini", "task"},
 		{"--explain=false", "task"},
 		{"--json=false", "task"},
 		{"--explain", "--optimize"},
@@ -209,6 +215,17 @@ func TestRunUsesDefaultRecommender(t *testing.T) {
 		t.Fatalf("expected success exit code, got %d: %s", exitCode, stderr.String())
 	}
 	assertContainsAll(t, stdout.String(), "Model: GPT 5.5", "Reasoning: GPT reasoning level: high")
+}
+
+func TestRunAgainstUsesDefaultRecommenderForCodeReview(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Run([]string{"--against=gpt", "review this pull request for bugs"}, &stdout, &stderr, nil)
+
+	if exitCode != 0 {
+		t.Fatalf("expected success exit code, got %d: %s", exitCode, stderr.String())
+	}
+	assertContainsAll(t, stdout.String(), "Model: Opus 4.8", "Reasoning: Anthropic Effort Level: high")
 }
 
 func TestRunWithNilWritersDiscardsOutput(t *testing.T) {

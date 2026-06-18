@@ -30,6 +30,16 @@ go run ./cmd/wayfinder --optimize cost "implement a small Go API endpoint"
 
 For substantive coding, value selects GPT 5.5 high, cost and speed select medium, and quality selects xhigh. Genuinely simple coding stays at low except quality, which raises it to medium.
 
+## Adversarial code review
+
+Use `--against gpt` or `--against claude` for code-review tasks to choose the opposite model family:
+
+```sh
+go run ./cmd/wayfinder --against gpt "review this pull request for bugs"
+```
+
+GPT-authored work is reviewed by Opus 4.8. Claude-authored work is reviewed by GPT 5.5. Without `--against`, code review defaults to GPT 5.5. The flag is ignored for tasks that are not classified as code review.
+
 ## JSON output
 
 Use `--json` for a single machine-readable recommendation document:

@@ -236,6 +236,94 @@ func TestOptimizationDoesNotOverrideHighRiskComplexity(t *testing.T) {
 	}
 }
 
+func TestCodeReviewAgainstChoosesOppositeFamily(t *testing.T) {
+	cases := []struct {
+		name      string
+		against   AgainstFamily
+		wantModel string
+		wantLevel string
+	}{
+		{name: "against gpt", against: AgainstGPT, wantModel: Opus48, wantLevel: "Anthropic Effort Level: high"},
+		{name: "against claude", against: AgainstClaude, wantModel: GPT55, wantLevel: "GPT reasoning level: high"},
+		{name: "default reviewer", against: AgainstUnspecified, wantModel: GPT55, wantLevel: "GPT reasoning level: high"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := RecommendWithOptimizationAgainst("perform an adversarial code review of this Go implementation", OptimizeValue, tc.against)
+			if rec.Model != tc.wantModel || rec.ReasoningSetting != tc.wantLevel {
+				t.Fatalf("expected %s with %q, got %+v", tc.wantModel, tc.wantLevel, rec)
+			}
+		})
+	}
+}
+
+func TestCodeReviewOptimizationMatrix(t *testing.T) {
+	cases := []struct {
+		name       string
+		against    AgainstFamily
+		profile    Optimization
+		wantModel  string
+		wantReason string
+	}{
+		{name: "claude cost", against: AgainstGPT, profile: OptimizeCost, wantModel: Opus48, wantReason: "Anthropic Effort Level: medium"},
+		{name: "claude speed", against: AgainstGPT, profile: OptimizeSpeed, wantModel: Opus48, wantReason: "Anthropic Effort Level: medium"},
+		{name: "claude value", against: AgainstGPT, profile: OptimizeValue, wantModel: Opus48, wantReason: "Anthropic Effort Level: high"},
+		{name: "claude quality", against: AgainstGPT, profile: OptimizeQuality, wantModel: Opus48, wantReason: "Anthropic Effort Level: xhigh"},
+		{name: "gpt cost", against: AgainstClaude, profile: OptimizeCost, wantModel: GPT55, wantReason: "GPT reasoning level: medium"},
+		{name: "gpt speed", against: AgainstClaude, profile: OptimizeSpeed, wantModel: GPT55, wantReason: "GPT reasoning level: medium"},
+		{name: "gpt value", against: AgainstClaude, profile: OptimizeValue, wantModel: GPT55, wantReason: "GPT reasoning level: high"},
+		{name: "gpt quality", against: AgainstClaude, profile: OptimizeQuality, wantModel: GPT55, wantReason: "GPT reasoning level: xhigh"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := RecommendWithOptimizationAgainst("review this pull request for bugs", tc.profile, tc.against)
+			if rec.Model != tc.wantModel || rec.ReasoningSetting != tc.wantReason {
+				t.Fatalf("expected %s with %q, got %+v", tc.wantModel, tc.wantReason, rec)
+			}
+		})
+	}
+}
+
+func TestCodeReviewClassifierRecognizesAuditAndSecurityReviewPhrasing(t *testing.T) {
+	cases := []string{
+		"audit this PR for edge-case bugs",
+		"security review this authentication code",
+	}
+
+	for _, task := range cases {
+		t.Run(task, func(t *testing.T) {
+			rec := RecommendWithOptimizationAgainst(task, OptimizeValue, AgainstGPT)
+			if rec.Model != Opus48 || rec.ReasoningSetting != "Anthropic Effort Level: high" {
+				t.Fatalf("expected Claude cross-family code review for %q, got %+v", task, rec)
+			}
+		})
+	}
+}
+
+func TestAgainstDoesNotOverrideNonCodeReviewSelection(t *testing.T) {
+	rec := RecommendWithOptimizationAgainst("summarize a long document into a research brief", OptimizeValue, AgainstGPT)
+	if rec.Model != Opus48 || rec.ReasoningSetting != "Anthropic Effort Level: medium" {
+		t.Fatalf("expected normal non-review recommendation to ignore --against, got %+v", rec)
+	}
+
+	rec = RecommendWithOptimizationAgainst("fix a typo in a README", OptimizeValue, AgainstGPT)
+	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: low" {
+		t.Fatalf("expected simple coding recommendation to ignore --against, got %+v", rec)
+	}
+}
+
+func TestCodeReviewHumanOutputUsesSelectedProviderTerminology(t *testing.T) {
+	claudeReview := Format(RecommendWithOptimizationAgainst("code review this Go implementation", OptimizeQuality, AgainstGPT))
+	assertContainsAll(t, claudeReview, "Model: Opus 4.8", "Reasoning: Anthropic Effort Level: xhigh")
+	assertNotContainsAny(t, claudeReview, "GPT reasoning level")
+
+	gptReview := Format(RecommendWithOptimizationAgainst("code review this Go implementation", OptimizeQuality, AgainstClaude))
+	assertContainsAll(t, gptReview, "Model: GPT 5.5", "Reasoning: GPT reasoning level: xhigh")
+	assertNotContainsAny(t, gptReview, "Anthropic Effort Level")
+}
+
 func TestCodingBenchmarkOptimizationMatrix(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -355,6 +443,14 @@ func TestClassifierRecognizesBroaderModelSelectionSignals(t *testing.T) {
 func TestParseOptimizationRejectsEmptyOrUnsupportedValues(t *testing.T) {
 	for _, value := range []string{"", "cheap", "fastest"} {
 		if _, ok := ParseOptimization(value); ok {
+			t.Fatalf("expected %q to be rejected", value)
+		}
+	}
+}
+
+func TestParseAgainstFamilyRejectsEmptyOrUnsupportedValues(t *testing.T) {
+	for _, value := range []string{"", "anthropic", "gemini"} {
+		if _, ok := ParseAgainstFamily(value); ok {
 			t.Fatalf("expected %q to be rejected", value)
 		}
 	}

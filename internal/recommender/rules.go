@@ -6,6 +6,7 @@ type recommendationRule struct {
 }
 
 var defaultRules = []recommendationRule{
+	{matches: func(traits taskTraits) bool { return traits.codeReview }, recommend: recommendCodeReview},
 	{matches: func(traits taskTraits) bool { return traits.anthropicFit || traits.visualDesign }, recommend: recommendAnthropicFit},
 	{matches: func(traits taskTraits) bool { return traits.coding }, recommend: recommendCoding},
 	{matches: func(traits taskTraits) bool { return traits.highRisk }, recommend: recommendHighRisk},
@@ -59,15 +60,52 @@ func recommendCoding(optimization Optimization, traits taskTraits) Recommendatio
 		return recommendSimple(optimization, traits)
 	}
 
+	return recommendGPTReviewOrCoding(optimization, "coding")
+}
+
+func recommendCodeReview(optimization Optimization, traits taskTraits) Recommendation {
+	switch traits.against {
+	case AgainstGPT:
+		return recommendClaudeReview(optimization)
+	case AgainstClaude, AgainstUnspecified:
+		return recommendGPTReviewOrCoding(optimization, "review")
+	default:
+		return recommendGPTReviewOrCoding(optimization, "review")
+	}
+}
+
+func recommendGPTReviewOrCoding(optimization Optimization, domain string) Recommendation {
+	substantiveWork := "substantive coding work"
+	costReason := "Cost optimization selects the lower-consumption coding frontier option while preserving GPT 5.5 capability."
+	speedReason := "Speed optimization selects the lower-consumption coding frontier option without relying on latency measurements."
+	if domain == "review" {
+		substantiveWork = "adversarial code review"
+		costReason = "Cost optimization selects the lower-consumption GPT review frontier option while preserving GPT 5.5 capability."
+		speedReason = "Speed optimization selects the lower-consumption GPT review frontier option without relying on latency measurements."
+	}
+
 	switch optimization {
 	case OptimizeCost:
-		return gptRecommendation(GPT55, "medium", "Cost optimization selects the lower-consumption coding frontier option while preserving GPT 5.5 capability.")
+		return gptRecommendation(GPT55, "medium", costReason)
 	case OptimizeSpeed:
-		return gptRecommendation(GPT55, "medium", "Speed optimization selects the lower-consumption coding frontier option without relying on latency measurements.")
+		return gptRecommendation(GPT55, "medium", speedReason)
 	case OptimizeQuality:
-		return gptRecommendation(GPT55, "xhigh", "Quality optimization selects the strongest GPT 5.5 reasoning for substantive coding work.")
+		return gptRecommendation(GPT55, "xhigh", "Quality optimization selects the strongest GPT 5.5 reasoning for "+substantiveWork+".")
 	default:
-		return gptRecommendation(GPT55, "high", "Balanced value choice for substantive coding work.")
+		return gptRecommendation(GPT55, "high", "Balanced value choice for "+substantiveWork+".")
+	}
+}
+
+func recommendClaudeReview(optimization Optimization) Recommendation {
+	switch optimization {
+	case OptimizeCost:
+		return anthropicRecommendation(Opus48, "medium", "Cost optimization selects Claude Opus for adversarial review while keeping effort moderate.")
+	case OptimizeSpeed:
+		return anthropicRecommendation(Opus48, "medium", "Speed optimization selects Claude Opus for adversarial review without relying on latency measurements.")
+	case OptimizeQuality:
+		return anthropicRecommendation(Opus48, "xhigh", "Quality optimization selects Claude Opus with maximum review effort against GPT-authored work.")
+	default:
+		return anthropicRecommendation(Opus48, "high", "Cross-family review selects Claude Opus to evaluate GPT-authored work.")
 	}
 }
 
