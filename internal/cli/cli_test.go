@@ -9,13 +9,13 @@ import (
 )
 
 type stubRecommender struct {
-	task       string
-	preference recommender.Preference
+	task         string
+	optimization recommender.Optimization
 }
 
-func (s *stubRecommender) RecommendWithPreference(task string, preference recommender.Preference) recommender.Recommendation {
+func (s *stubRecommender) RecommendWithOptimization(task string, optimization recommender.Optimization) recommender.Recommendation {
 	s.task = task
-	s.preference = preference
+	s.optimization = optimization
 	return recommender.Recommendation{Model: recommender.GPT55, ReasoningSetting: "GPT reasoning level: medium", Reason: "test recommendation"}
 }
 
@@ -23,13 +23,13 @@ func TestRunParsesArgumentsAndWritesRecommendation(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	rec := &stubRecommender{}
 
-	exitCode := Run([]string{"--prefer=quality", "implement", "an", "API"}, &stdout, &stderr, rec)
+	exitCode := Run([]string{"--optimize=quality", "implement", "an", "API"}, &stdout, &stderr, rec)
 
 	if exitCode != 0 {
 		t.Fatalf("expected success exit code, got %d: %s", exitCode, stderr.String())
 	}
-	if rec.preference != recommender.PreferQuality || rec.task != "implement an API" {
-		t.Fatalf("unexpected recommendation input: preference=%q task=%q", rec.preference, rec.task)
+	if rec.optimization != recommender.OptimizeQuality || rec.task != "implement an API" {
+		t.Fatalf("unexpected recommendation input: optimization=%q task=%q", rec.optimization, rec.task)
 	}
 	assertContainsAll(t, stdout.String(), "Model: GPT 5.5", "Reasoning: GPT reasoning level: medium", "Reason: test recommendation")
 	if stderr.Len() != 0 {
@@ -40,9 +40,10 @@ func TestRunParsesArgumentsAndWritesRecommendation(t *testing.T) {
 func TestRunRejectsInvalidArguments(t *testing.T) {
 	cases := [][]string{
 		{},
-		{"--prefer"},
-		{"--prefer", ""},
-		{"--prefer=cheap"},
+		{"--optimize"},
+		{"--optimize", ""},
+		{"--optimize=cheap"},
+		{"--prefer=quality", "task"},
 		{"--unknown", "task"},
 	}
 

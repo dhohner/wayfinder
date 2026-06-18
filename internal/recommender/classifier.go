@@ -3,14 +3,15 @@ package recommender
 import "strings"
 
 type taskTraits struct {
-	simple         bool
-	coding         bool
-	largeContext   bool
-	anthropicFit   bool
-	visualDesign   bool
-	nuancedRoutine bool
-	deepReasoning  bool
-	highRisk       bool
+	simple           bool
+	coding           bool
+	largeContext     bool
+	anthropicFit     bool
+	visualDesign     bool
+	nuancedRoutine   bool
+	deepReasoning    bool
+	highRisk         bool
+	correctnessHeavy bool
 }
 
 var simpleSignals = []string{
@@ -18,11 +19,11 @@ var simpleSignals = []string{
 }
 
 var codingSignals = []string{
-	"code", "coding", "implement", "refactor", "debug", "test", "typescript", "javascript", "golang", "go", "python", "rust", "java", "sql", "api", "sdk", "cli", "module", "bug", "endpoint", "function", "class", "component", "frontend", "backend", "database", "schema", "query", "build", "deploy",
+	"code", "coding", "implement", "refactor", "debug", "test", "typescript", "javascript", "golang", "go", "python", "rust", "java", "sql", "api", "sdk", "cli", "module", "bug", "endpoint", "function", "class", "component", "frontend", "backend", "database", "schema", "query", "build", "deploy", "parser", "parse",
 }
 
 var largeContextSignals = []string{
-	"large", "long", "many files", "multiple files", "whole repo", "entire repo", "repository", "repo", "codebase", "monorepo", "migration", "cross-service", "multi-service", "integration", "legacy", "10-page", "10 page", "thousands of lines",
+	"long", "many files", "multiple files", "whole repo", "entire repo", "repository", "repo", "codebase", "monorepo", "migration", "cross-service", "multi-service", "integration", "legacy", "10-page", "10 page", "thousands of lines",
 }
 
 var anthropicFitSignals = []string{
@@ -45,18 +46,29 @@ var highRiskSignals = []string{
 	"security", "auth", "authentication", "authorization", "oauth", "sso", "rbac", "permission", "permissions", "secret", "token", "payment", "billing", "invoice", "production", "data loss", "incident", "compliance", "privacy", "pii", "gdpr", "hipaa", "pci", "encryption", "legal", "medical", "financial", "finance", "access control",
 }
 
+var correctnessHeavySignals = []string{
+	"parse", "parser", "parsing", "typed comparison", "type comparison", "stable ordering", "stable sort", "edge case", "edge cases", "arbitrarily large", "large values", "big integer", "bignum", "precision", "precise", "lossless", "lossless precision", "required behavior", "current behavior", "preserve behavior", "guarantee", "guarantees", "rounding", "overflow",
+}
+
 func classify(task string) taskTraits {
 	text := strings.ToLower(task)
+	correctnessHeavy := hasAny(text, correctnessHeavySignals...)
+	coding := hasAny(text, codingSignals...) || isCorrectnessHeavyCoding(text, correctnessHeavy)
 	return taskTraits{
-		simple:         hasAny(text, simpleSignals...),
-		coding:         hasAny(text, codingSignals...),
-		largeContext:   hasAny(text, largeContextSignals...),
-		anthropicFit:   hasAny(text, anthropicFitSignals...),
-		visualDesign:   hasAny(text, visualDesignSignals...),
-		nuancedRoutine: hasAny(text, nuancedRoutineSignals...),
-		deepReasoning:  hasAny(text, deepReasoningSignals...),
-		highRisk:       hasAny(text, highRiskSignals...),
+		simple:           hasAny(text, simpleSignals...),
+		coding:           coding,
+		largeContext:     hasAny(text, largeContextSignals...),
+		anthropicFit:     hasAny(text, anthropicFitSignals...),
+		visualDesign:     hasAny(text, visualDesignSignals...),
+		nuancedRoutine:   hasAny(text, nuancedRoutineSignals...),
+		deepReasoning:    hasAny(text, deepReasoningSignals...),
+		highRisk:         hasAny(text, highRiskSignals...),
+		correctnessHeavy: correctnessHeavy,
 	}
+}
+
+func isCorrectnessHeavyCoding(text string, correctnessHeavy bool) bool {
+	return correctnessHeavy && hasAny(text, "compare", "comparison", "ensure", "fix", "handle", "implement", "make", "preserve", "sort", "support", "validate", "behavior")
 }
 
 func hasAny(text string, needles ...string) bool {

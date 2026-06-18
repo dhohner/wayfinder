@@ -26,27 +26,29 @@ type Recommendation struct {
 	Reason           string
 }
 
-// Preference is a simple recommendation bias requested by the developer.
-type Preference string
+// Optimization is the recommendation mode requested by the developer.
+type Optimization string
 
 const (
-	PreferNone    Preference = ""
-	PreferQuality Preference = "quality"
-	PreferCost    Preference = "cost"
-	PreferSpeed   Preference = "speed"
+	OptimizeValue   Optimization = "value"
+	OptimizeQuality Optimization = "quality"
+	OptimizeCost    Optimization = "cost"
+	OptimizeSpeed   Optimization = "speed"
 )
 
-// ParsePreference validates a --prefer value.
-func ParsePreference(value string) (Preference, bool) {
-	switch Preference(strings.ToLower(strings.TrimSpace(value))) {
-	case PreferQuality:
-		return PreferQuality, true
-	case PreferCost:
-		return PreferCost, true
-	case PreferSpeed:
-		return PreferSpeed, true
+// ParseOptimization validates a --optimize value.
+func ParseOptimization(value string) (Optimization, bool) {
+	switch Optimization(strings.ToLower(strings.TrimSpace(value))) {
+	case OptimizeValue:
+		return OptimizeValue, true
+	case OptimizeQuality:
+		return OptimizeQuality, true
+	case OptimizeCost:
+		return OptimizeCost, true
+	case OptimizeSpeed:
+		return OptimizeSpeed, true
 	default:
-		return PreferNone, false
+		return OptimizeValue, false
 	}
 }
 
@@ -70,20 +72,18 @@ func Recommend(task string) Recommendation {
 	return NewService().Recommend(task)
 }
 
-// RecommendWithPreference returns one recommendation, optionally biased toward quality, cost, or speed.
-func RecommendWithPreference(task string, preference Preference) Recommendation {
-	return NewService().RecommendWithPreference(task, preference)
+// RecommendWithOptimization returns one recommendation optimized for value, quality, cost, or speed.
+func RecommendWithOptimization(task string, optimization Optimization) Recommendation {
+	return NewService().RecommendWithOptimization(task, optimization)
 }
 
 // Recommend returns one offline, rules-based recommendation for a natural-language task.
 func (s Service) Recommend(task string) Recommendation {
-	return s.RecommendWithPreference(task, PreferNone)
+	return s.RecommendWithOptimization(task, OptimizeValue)
 }
 
-// RecommendWithPreference returns one recommendation, optionally biased toward quality, cost, or speed.
-// Preferences are soft hints: they influence the choice only when the task traits
-// make that bias appropriate, and they never downgrade high-risk or complex work.
-func (s Service) RecommendWithPreference(task string, preference Preference) Recommendation {
+// RecommendWithOptimization returns one recommendation for the requested optimization mode.
+func (s Service) RecommendWithOptimization(task string, optimization Optimization) Recommendation {
 	traits := classify(task)
 	rules := s.rules
 	if rules == nil {
@@ -92,7 +92,7 @@ func (s Service) RecommendWithPreference(task string, preference Preference) Rec
 
 	for _, rule := range rules {
 		if rule.matches(traits) {
-			return rule.recommend(preference)
+			return rule.recommend(optimization, traits)
 		}
 	}
 

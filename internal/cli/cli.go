@@ -8,12 +8,12 @@ import (
 	"github.com/dhohner/wayfinder/internal/recommender"
 )
 
-const usage = "Usage: wayfinder [--prefer quality|cost|speed] \"describe the task\""
+const usage = "Usage: wayfinder [--optimize value|cost|speed|quality] \"describe the task\""
 
 // Recommender is the behavior required by the CLI. It keeps command parsing
 // independent from the recommendation implementation and easy to test.
 type Recommender interface {
-	RecommendWithPreference(task string, preference recommender.Preference) recommender.Recommendation
+	RecommendWithOptimization(task string, optimization recommender.Optimization) recommender.Recommendation
 }
 
 // Run executes the command and returns a process exit code. It never calls os.Exit.
@@ -28,45 +28,45 @@ func Run(args []string, stdout, stderr io.Writer, rec Recommender) int {
 		rec = recommender.NewService()
 	}
 
-	preference, task, ok := parseArgs(args)
+	optimization, task, ok := parseArgs(args)
 	if !ok || task == "" {
 		fmt.Fprintln(stderr, usage)
 		return 2
 	}
 
-	fmt.Fprintln(stdout, recommender.Format(rec.RecommendWithPreference(task, preference)))
+	fmt.Fprintln(stdout, recommender.Format(rec.RecommendWithOptimization(task, optimization)))
 	return 0
 }
 
-func parseArgs(args []string) (recommender.Preference, string, bool) {
-	var preference recommender.Preference
+func parseArgs(args []string) (recommender.Optimization, string, bool) {
+	optimization := recommender.OptimizeValue
 	var taskParts []string
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
-		case arg == "--prefer":
+		case arg == "--optimize":
 			if i+1 >= len(args) {
-				return recommender.PreferNone, "", false
+				return recommender.OptimizeValue, "", false
 			}
-			parsed, ok := recommender.ParsePreference(args[i+1])
+			parsed, ok := recommender.ParseOptimization(args[i+1])
 			if !ok {
-				return recommender.PreferNone, "", false
+				return recommender.OptimizeValue, "", false
 			}
-			preference = parsed
+			optimization = parsed
 			i++
-		case strings.HasPrefix(arg, "--prefer="):
-			parsed, ok := recommender.ParsePreference(strings.TrimPrefix(arg, "--prefer="))
+		case strings.HasPrefix(arg, "--optimize="):
+			parsed, ok := recommender.ParseOptimization(strings.TrimPrefix(arg, "--optimize="))
 			if !ok {
-				return recommender.PreferNone, "", false
+				return recommender.OptimizeValue, "", false
 			}
-			preference = parsed
+			optimization = parsed
 		case strings.HasPrefix(arg, "--"):
-			return recommender.PreferNone, "", false
+			return recommender.OptimizeValue, "", false
 		default:
 			taskParts = append(taskParts, arg)
 		}
 	}
 
-	return preference, strings.TrimSpace(strings.Join(taskParts, " ")), true
+	return optimization, strings.TrimSpace(strings.Join(taskParts, " ")), true
 }
