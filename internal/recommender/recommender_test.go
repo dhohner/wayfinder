@@ -284,6 +284,28 @@ func TestClassifierUsesTermBoundariesForShortKeywords(t *testing.T) {
 	}
 }
 
+func TestClassifierRecognizesBroaderModelSelectionSignals(t *testing.T) {
+	cases := []struct {
+		name string
+		task string
+		want func(taskTraits) bool
+	}{
+		{name: "oauth security", task: "audit OAuth token handling for PCI compliance", want: func(traits taskTraits) bool { return traits.highRisk }},
+		{name: "frontend coding", task: "build a frontend component backed by a SQL query", want: func(traits taskTraits) bool { return traits.coding }},
+		{name: "repo scope", task: "plan a legacy monorepo migration across multiple files", want: func(traits taskTraits) bool { return traits.largeContext }},
+		{name: "diagnosis", task: "diagnose a memory leak and optimize the state machine", want: func(traits taskTraits) bool { return traits.deepReasoning }},
+		{name: "longform writing", task: "edit this editorial speech for brand voice", want: func(traits taskTraits) bool { return traits.anthropicFit }},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if traits := classify(tc.task); !tc.want(traits) {
+				t.Fatalf("expected %q to set requested trait, got %+v", tc.task, traits)
+			}
+		})
+	}
+}
+
 func TestParsePreferenceRejectsEmptyOrUnsupportedValues(t *testing.T) {
 	for _, value := range []string{"", "cheap", "fastest"} {
 		if _, ok := ParsePreference(value); ok {
