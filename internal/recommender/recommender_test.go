@@ -365,6 +365,72 @@ func TestFormatContainsOneRecommendationOnly(t *testing.T) {
 	assertHumanOnlyOutput(t, out)
 }
 
+func TestFormatWithExplanationAddsExactGPT55BenchmarkValues(t *testing.T) {
+	cases := []struct {
+		level     string
+		passAt1   string
+		aic       string
+		aicFactor string
+	}{
+		{level: "medium", passAt1: "48%±3%", aic: "57.0", aicFactor: "1.00"},
+		{level: "high", passAt1: "62%±4%", aic: "93.0", aicFactor: "1.63"},
+		{level: "xhigh", passAt1: "70%±3%", aic: "141.0", aicFactor: "2.47"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.level, func(t *testing.T) {
+			out := FormatWithExplanation(gptRecommendation(GPT55, tc.level, "test recommendation"))
+
+			assertContainsAll(t, out, "Pass@1 "+tc.passAt1, "AIC "+tc.aic, "AIC factor "+tc.aicFactor, "Tradeoff:")
+		})
+	}
+}
+
+func TestFormatWithExplanationAddsExactClaudeBenchmarkValues(t *testing.T) {
+	cases := []struct {
+		name      string
+		rec       Recommendation
+		passAt1   string
+		aic       string
+		aicFactor string
+	}{
+		{name: "opus medium", rec: anthropicRecommendation(Opus48, "medium", "test recommendation"), passAt1: "47%±4%", aic: "100.0", aicFactor: "1.75"},
+		{name: "opus high", rec: anthropicRecommendation(Opus48, "high", "test recommendation"), passAt1: "51%±3%", aic: "120.0", aicFactor: "2.11"},
+		{name: "sonnet high", rec: anthropicRecommendation(Sonnet46, "high", "test recommendation"), passAt1: "32%±2%", aic: "114.0", aicFactor: "2.00"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := FormatWithExplanation(tc.rec)
+
+			assertContainsAll(t, out, "Pass@1 "+tc.passAt1, "AIC "+tc.aic, "AIC factor "+tc.aicFactor, "Tradeoff:")
+		})
+	}
+}
+
+func TestFormatWithExplanationDoesNotApproximateMissingBenchmarkMatch(t *testing.T) {
+	out := FormatWithExplanation(gptRecommendation(GPT55, "low", "Lower-reasoning recommendation."))
+
+	assertHumanOnlyOutput(t, out)
+	assertNotContainsAny(t, out, "Benchmark:", "Pass@1", "AIC ", "AIC factor", "57.0", "48%±3%")
+}
+
+func TestDefaultFormatRemainsBenchmarkFree(t *testing.T) {
+	out := Format(gptRecommendation(GPT55, "high", "Balanced value choice."))
+
+	assertHumanOnlyOutput(t, out)
+	assertNotContainsAny(t, out, "Pass@1", "AIC", "AIC factor", "Tradeoff", "Benchmark:")
+}
+
+func TestSpeedExplanationDoesNotClaimMeasuredLatencyAdvantage(t *testing.T) {
+	rec := RecommendWithOptimization("implement a Go API endpoint", OptimizeSpeed)
+	out := FormatWithExplanation(rec)
+	lower := strings.ToLower(out)
+
+	assertContainsAll(t, out, "Pass@1 48%±3%", "the data contains no latency measurements")
+	assertNotContainsAny(t, lower, "empirically faster", "measured faster", "latency advantage")
+}
+
 func TestBuiltInRecommendationsStayWithinHumanOnlyOutputGuardrails(t *testing.T) {
 	tasks := []string{
 		"fix a typo in a README",
@@ -381,6 +447,24 @@ func TestBuiltInRecommendationsStayWithinHumanOnlyOutputGuardrails(t *testing.T)
 		for _, optimization := range optimizations {
 			out := Format(RecommendWithOptimization(task, optimization))
 			assertHumanOnlyOutput(t, out)
+		}
+	}
+}
+
+func assertContainsAll(t *testing.T, got string, wants ...string) {
+	t.Helper()
+	for _, want := range wants {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected output to contain %q, got:\n%s", want, got)
+		}
+	}
+}
+
+func assertNotContainsAny(t *testing.T, got string, wants ...string) {
+	t.Helper()
+	for _, want := range wants {
+		if strings.Contains(got, want) {
+			t.Fatalf("expected output not to contain %q, got:\n%s", want, got)
 		}
 	}
 }

@@ -63,7 +63,7 @@ func recommendCoding(optimization Optimization, traits taskTraits) Recommendatio
 	case OptimizeCost:
 		return gptRecommendation(GPT55, "medium", "Cost optimization selects the lower-consumption coding frontier option while preserving GPT 5.5 capability.")
 	case OptimizeSpeed:
-		return gptRecommendation(GPT55, "medium", "Speed optimization selects the lower-consumption coding frontier option without claiming measured latency advantage.")
+		return gptRecommendation(GPT55, "medium", "Speed optimization selects the lower-consumption coding frontier option without relying on latency measurements.")
 	case OptimizeQuality:
 		return gptRecommendation(GPT55, "xhigh", "Quality optimization selects the strongest GPT 5.5 reasoning for substantive coding work.")
 	default:
