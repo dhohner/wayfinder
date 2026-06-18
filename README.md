@@ -18,7 +18,7 @@ Reasoning: GPT reasoning level: high
 Reason: Balanced value choice for substantive coding work.
 ```
 
-Wayfinder varies recommendations by task complexity and model family. Simple, low-risk work uses low-reasoning GPT 5.5, substantive coding defaults to higher GPT 5.5 reasoning, long-form creative or visual design work can use Opus with Anthropic Effort Level terminology, and ambiguous input receives a conservative offline default instead of a clarification prompt.
+Wayfinder varies recommendations by task complexity and model family. Simple, low-risk work uses low-reasoning GPT 5.5, substantive coding defaults to higher GPT 5.5 reasoning, visual/UI/UX design work uses Opus with low Anthropic Effort Level by default, long-form creative work can use Opus, and ambiguous input receives a conservative offline default instead of a clarification prompt.
 
 ## Optimization flags
 
@@ -28,7 +28,7 @@ Use `--optimize value`, `--optimize cost`, `--optimize speed`, or `--optimize qu
 go run ./cmd/wayfinder --optimize cost "implement a small Go API endpoint"
 ```
 
-For substantive coding, value selects GPT 5.5 high, cost and speed select medium, and quality selects xhigh. Genuinely simple coding stays at low except quality, which raises it to medium.
+For substantive coding, value selects GPT 5.5 high, cost and speed select medium, and quality selects xhigh. Genuinely simple coding stays at low except quality, which raises it to medium. Visual/UI/UX design stays on Opus 4.8 low for value, cost, and speed; quality raises it to Opus 4.8 medium.
 
 ## Adversarial code review
 

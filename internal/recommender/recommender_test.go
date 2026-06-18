@@ -87,6 +87,85 @@ func TestRecommendCodingTaskUsesBenchmarkValueDefault(t *testing.T) {
 	}
 }
 
+func TestRecommendImplementationIssueAboutVisualDesignUsesCodingPath(t *testing.T) {
+	task := `# Recommend Claude for visual, UI, and UX tasks
+
+Wayfinder should preserve task-specific model fit for visual design, UI, and UX work by selecting Claude Opus 4.8 at a low starting reasoning level.
+
+This rule is limited to visual and interface-design work such as visual design, UI design, UX design, interaction design, design systems, mockups, wireframes, layout, and typography. Software architecture, system design, and general coding must continue through the GPT coding or reasoning policies.
+
+Acceptance criteria:
+- A visual, UI, or UX task selects Claude Opus 4.8 with low reasoning by default.
+- Software architecture, system design, and general coding prompts do not enter the visual-design recommendation path.`
+
+	rec := Recommend(task)
+
+	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: high" {
+		t.Fatalf("expected substantive coding path for implementation issue, got %+v", rec)
+	}
+}
+
+func TestVisualDesignOptimizationMatrix(t *testing.T) {
+	tasks := []string{
+		"review this visual design mockup and improve typography",
+		"create a UI design wireframe for onboarding",
+		"improve the UX design and interaction design for this checkout flow",
+		"audit the UX for onboarding",
+		"define a design system layout and color palette",
+		"create screen design options using design tokens",
+		"develop a visual identity and brand design system",
+	}
+	profiles := []struct {
+		optimization Optimization
+		wantEffort   string
+	}{
+		{OptimizeValue, "Anthropic Effort Level: low"},
+		{OptimizeCost, "Anthropic Effort Level: low"},
+		{OptimizeSpeed, "Anthropic Effort Level: low"},
+		{OptimizeQuality, "Anthropic Effort Level: medium"},
+	}
+
+	for _, task := range tasks {
+		for _, profile := range profiles {
+			t.Run(task+"/"+string(profile.optimization), func(t *testing.T) {
+				rec := RecommendWithOptimization(task, profile.optimization)
+				if rec.Model != Opus48 || rec.ReasoningSetting != profile.wantEffort {
+					t.Fatalf("expected Opus 4.8 with %q for %q, got %+v", profile.wantEffort, task, rec)
+				}
+			})
+		}
+	}
+}
+
+func TestVisualDesignPathDoesNotCaptureCodingOrTechnicalDesign(t *testing.T) {
+	cases := []string{
+		"implement the UI design in TypeScript",
+		"build the UI in React",
+		"fix a layout bug in a frontend component",
+		"plan software architecture for a design system service",
+		"system design for UI design tooling",
+		"technical design for UI design tooling",
+		"software design for a UX analytics service",
+	}
+
+	for _, task := range cases {
+		t.Run(task, func(t *testing.T) {
+			rec := RecommendWithOptimization(task, OptimizeValue)
+			if rec.Model != GPT55 || !strings.HasPrefix(rec.ReasoningSetting, "GPT reasoning level:") {
+				t.Fatalf("expected GPT coding or reasoning path for %q, got %+v", task, rec)
+			}
+		})
+	}
+}
+
+func TestBrandVoiceDoesNotEnterVisualDesignPath(t *testing.T) {
+	rec := RecommendWithOptimization("edit this editorial speech for brand voice", OptimizeValue)
+
+	if rec.Model != Opus48 || rec.ReasoningSetting != "Anthropic Effort Level: medium" {
+		t.Fatalf("expected brand voice writing to stay on long-form Anthropic fit path, got %+v", rec)
+	}
+}
+
 func TestAnthropicRecommendationsUseEffortLevelTerminology(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -114,7 +193,7 @@ func TestAnthropicRecommendationsUseEffortLevelTerminology(t *testing.T) {
 			task:         "review this visual design mockup and improve typography",
 			optimization: OptimizeValue,
 			wantModel:    Opus48,
-			wantEffort:   "Anthropic Effort Level: medium",
+			wantEffort:   "Anthropic Effort Level: low",
 		},
 	}
 
@@ -506,10 +585,17 @@ func TestFormatWithExplanationAddsExactClaudeBenchmarkValues(t *testing.T) {
 }
 
 func TestFormatWithExplanationDoesNotApproximateMissingBenchmarkMatch(t *testing.T) {
-	out := FormatWithExplanation(gptRecommendation(GPT55, "low", "Lower-reasoning recommendation."))
+	cases := []Recommendation{
+		gptRecommendation(GPT55, "low", "Lower-reasoning recommendation."),
+		anthropicRecommendation(Opus48, "low", "Low-effort visual recommendation."),
+	}
 
-	assertHumanOnlyOutput(t, out)
-	assertNotContainsAny(t, out, "Benchmark:", "Pass@1", "AIC ", "AIC factor", "57.0", "48%±3%")
+	for _, rec := range cases {
+		out := FormatWithExplanation(rec)
+
+		assertHumanOnlyOutput(t, out)
+		assertNotContainsAny(t, out, "Benchmark:", "Pass@1", "AIC ", "AIC factor", "57.0", "48%±3%", "47%±4%", "100.0")
+	}
 }
 
 func TestFormatJSONNormalizesRecommendationAndExactBenchmark(t *testing.T) {
@@ -607,20 +693,32 @@ func TestFormatJSONCoversEveryBundledExactBenchmark(t *testing.T) {
 }
 
 func TestFormatJSONOmitsBenchmarkForMissingExactMatch(t *testing.T) {
-	out, err := FormatJSON(gptRecommendation(GPT55, "low", "Lower-reasoning recommendation."), OptimizeSpeed, true)
-	if err != nil {
-		t.Fatalf("expected JSON format to succeed: %v", err)
+	cases := []struct {
+		rec           Recommendation
+		profile       Optimization
+		wantModel     string
+		wantReasoning string
+	}{
+		{gptRecommendation(GPT55, "low", "Lower-reasoning recommendation."), OptimizeSpeed, "gpt-5.5", "low"},
+		{anthropicRecommendation(Opus48, "low", "Low-effort visual recommendation."), OptimizeValue, "claude-opus-4.8", "low"},
 	}
 
-	var doc map[string]any
-	if err := json.Unmarshal([]byte(out), &doc); err != nil {
-		t.Fatalf("expected valid JSON, got %q: %v", out, err)
-	}
-	if doc["model"] != "gpt-5.5" || doc["reasoning"] != "low" || doc["profile"] != "speed" {
-		t.Fatalf("unexpected normalized fields: %v", doc)
-	}
-	if _, ok := doc["benchmark"]; ok {
-		t.Fatalf("did not expect benchmark for missing exact match: %v", doc)
+	for _, tc := range cases {
+		out, err := FormatJSON(tc.rec, tc.profile, true)
+		if err != nil {
+			t.Fatalf("expected JSON format to succeed: %v", err)
+		}
+
+		var doc map[string]any
+		if err := json.Unmarshal([]byte(out), &doc); err != nil {
+			t.Fatalf("expected valid JSON, got %q: %v", out, err)
+		}
+		if doc["model"] != tc.wantModel || doc["reasoning"] != tc.wantReasoning || doc["profile"] != string(tc.profile) {
+			t.Fatalf("unexpected normalized fields: %v", doc)
+		}
+		if _, ok := doc["benchmark"]; ok {
+			t.Fatalf("did not expect benchmark for missing exact match: %v", doc)
+		}
 	}
 }
 

@@ -7,8 +7,9 @@ type recommendationRule struct {
 
 var defaultRules = []recommendationRule{
 	{matches: func(traits taskTraits) bool { return traits.codeReview }, recommend: recommendCodeReview},
-	{matches: func(traits taskTraits) bool { return traits.anthropicFit || traits.visualDesign }, recommend: recommendAnthropicFit},
+	{matches: isVisualDesignOnly, recommend: recommendVisualDesign},
 	{matches: func(traits taskTraits) bool { return traits.coding }, recommend: recommendCoding},
+	{matches: func(traits taskTraits) bool { return traits.anthropicFit }, recommend: recommendAnthropicFit},
 	{matches: func(traits taskTraits) bool { return traits.highRisk }, recommend: recommendHighRisk},
 	{matches: func(traits taskTraits) bool { return traits.deepReasoning }, recommend: recommendDeepReasoning},
 	{matches: func(traits taskTraits) bool { return traits.nuancedRoutine }, recommend: recommendNuancedRoutine},
@@ -33,12 +34,23 @@ func recommendDeepReasoning(optimization Optimization, _ taskTraits) Recommendat
 func recommendAnthropicFit(optimization Optimization, _ taskTraits) Recommendation {
 	switch optimization {
 	case OptimizeQuality:
-		return anthropicRecommendation(Opus48, "high", "Quality optimization chooses Opus for long-form, creative, or visual design work where nuance matters.")
+		return anthropicRecommendation(Opus48, "high", "Quality optimization chooses Opus for long-form or creative work where nuance matters.")
 	case OptimizeCost, OptimizeSpeed:
 		return gptRecommendation(GPT55, "medium", "Cost or speed optimization favors the stronger default while keeping enough reasoning for nuanced work.")
 	default:
-		return anthropicRecommendation(Opus48, "medium", "Good fit for long-form, creative, or visual design work where Opus capability is useful.")
+		return anthropicRecommendation(Opus48, "medium", "Good fit for long-form or creative work where Opus capability is useful.")
 	}
+}
+
+func isVisualDesignOnly(traits taskTraits) bool {
+	return traits.visualDesign && !traits.codingIntent && !traits.technicalDesign
+}
+
+func recommendVisualDesign(optimization Optimization, _ taskTraits) Recommendation {
+	if optimization == OptimizeQuality {
+		return anthropicRecommendation(Opus48, "medium", "Quality optimization raises effort for visual, UI, or UX design work where interface nuance matters.")
+	}
+	return anthropicRecommendation(Opus48, "low", "Good fit for visual, UI, or UX design work while keeping starting effort low.")
 }
 
 func recommendNuancedRoutine(optimization Optimization, _ taskTraits) Recommendation {

@@ -5,10 +5,12 @@ import "strings"
 type taskTraits struct {
 	simple           bool
 	coding           bool
+	codingIntent     bool
 	codeReview       bool
 	largeContext     bool
 	anthropicFit     bool
 	visualDesign     bool
+	technicalDesign  bool
 	nuancedRoutine   bool
 	deepReasoning    bool
 	highRisk         bool
@@ -21,7 +23,11 @@ var simpleSignals = []string{
 }
 
 var codingSignals = []string{
-	"code", "coding", "implement", "refactor", "debug", "test", "typescript", "javascript", "golang", "go", "python", "rust", "java", "sql", "api", "sdk", "cli", "module", "bug", "endpoint", "function", "class", "component", "frontend", "backend", "database", "schema", "query", "build", "deploy", "parser", "parse",
+	"code", "coding", "implement", "implementation", "refactor", "debug", "test", "typescript", "javascript", "react", "vue", "angular", "css", "html", "jsx", "tsx", "golang", "go", "python", "rust", "java", "sql", "api", "sdk", "cli", "module", "bug", "endpoint", "function", "class", "component", "frontend", "backend", "database", "schema", "query", "build", "deploy", "parser", "parse",
+}
+
+var codingIntentSignals = []string{
+	"code", "coding", "implement", "implementation", "refactor", "debug", "test", "typescript", "javascript", "react", "vue", "angular", "css", "html", "jsx", "tsx", "golang", "go", "python", "rust", "java", "sql", "api", "sdk", "cli", "module", "bug", "endpoint", "function", "class", "backend", "database", "schema", "query", "deploy", "parser", "parse",
 }
 
 var largeContextSignals = []string{
@@ -37,7 +43,11 @@ var anthropicFitSignals = []string{
 }
 
 var visualDesignSignals = []string{
-	"visual design", "ui design", "ux design", "interface design", "interaction design", "design system", "mockup", "wireframe", "prototype", "layout", "typography", "color palette", "brand", "branding", "accessibility review", "a11y", "figma",
+	"visual design", "ui", "ux", "ui design", "ux design", "user interface", "user experience", "user interface design", "user experience design", "interface design", "interaction design", "design system", "design tokens", "mockup", "wireframe", "prototype", "layout", "page layout", "screen design", "typography", "color palette", "visual identity", "brand design", "brand identity", "branding", "accessibility review", "a11y", "figma",
+}
+
+var technicalDesignSignals = []string{
+	"architecture", "software architecture", "system architecture", "system design", "technical design", "software design", "engineering design",
 }
 
 var nuancedRoutineSignals = []string{
@@ -45,7 +55,7 @@ var nuancedRoutineSignals = []string{
 }
 
 var deepReasoningSignals = []string{
-	"architecture", "system design", "distributed", "intermittent", "root cause", "tradeoff", "trade-off", "complex", "race condition", "concurrency", "deadlock", "performance", "scalability", "optimize", "profiling", "memory leak", "algorithm", "state machine", "data model", "investigate", "diagnose",
+	"architecture", "system design", "technical design", "software design", "engineering design", "distributed", "intermittent", "root cause", "tradeoff", "trade-off", "complex", "race condition", "concurrency", "deadlock", "performance", "scalability", "optimize", "profiling", "memory leak", "algorithm", "state machine", "data model", "investigate", "diagnose",
 }
 
 var highRiskSignals = []string{
@@ -59,14 +69,17 @@ var correctnessHeavySignals = []string{
 func classify(task string) taskTraits {
 	text := strings.ToLower(task)
 	correctnessHeavy := hasAny(text, correctnessHeavySignals...)
-	coding := hasAny(text, codingSignals...) || isCorrectnessHeavyCoding(text, correctnessHeavy)
+	codingIntent := hasAny(text, codingIntentSignals...) || isCorrectnessHeavyCoding(text, correctnessHeavy)
+	coding := codingIntent || hasAny(text, codingSignals...)
 	return taskTraits{
 		simple:           hasAny(text, simpleSignals...),
 		coding:           coding,
+		codingIntent:     codingIntent,
 		codeReview:       isCodeReview(text, coding),
 		largeContext:     hasAny(text, largeContextSignals...),
 		anthropicFit:     hasAny(text, anthropicFitSignals...),
 		visualDesign:     hasAny(text, visualDesignSignals...),
+		technicalDesign:  hasAny(text, technicalDesignSignals...),
 		nuancedRoutine:   hasAny(text, nuancedRoutineSignals...),
 		deepReasoning:    hasAny(text, deepReasoningSignals...),
 		highRisk:         hasAny(text, highRiskSignals...),
