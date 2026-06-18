@@ -30,6 +30,16 @@ go run ./cmd/wayfinder --optimize cost "implement a small Go API endpoint"
 
 For substantive coding, value selects GPT 5.5 high, cost and speed select medium, and quality selects xhigh. Genuinely simple coding stays at low except quality, which raises it to medium.
 
+## JSON output
+
+Use `--json` for a single machine-readable recommendation document:
+
+```sh
+go run ./cmd/wayfinder --json --optimize quality "implement a small Go API endpoint"
+```
+
+JSON output uses normalized model and reasoning IDs. Exact bundled benchmark matches include numeric `pass_at_1`, `aic`, and `aic_factor` fields under `benchmark`; recommendations without an exact match omit `benchmark`.
+
 ## Primary v1 recommendations
 
 - GPT 5.5

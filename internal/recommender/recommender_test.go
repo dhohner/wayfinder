@@ -1,6 +1,7 @@
 package recommender
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -415,6 +416,127 @@ func TestFormatWithExplanationDoesNotApproximateMissingBenchmarkMatch(t *testing
 	assertNotContainsAny(t, out, "Benchmark:", "Pass@1", "AIC ", "AIC factor", "57.0", "48%±3%")
 }
 
+func TestFormatJSONNormalizesRecommendationAndExactBenchmark(t *testing.T) {
+	out, err := FormatJSON(gptRecommendation(GPT55, "high", "Balanced value choice."), OptimizeValue, false)
+	if err != nil {
+		t.Fatalf("expected JSON format to succeed: %v", err)
+	}
+
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("expected valid JSON, got %q: %v", out, err)
+	}
+	if doc["model"] != "gpt-5.5" || doc["reasoning"] != "high" || doc["profile"] != "value" || doc["reason"] != "Balanced value choice." {
+		t.Fatalf("unexpected normalized document: %v", doc)
+	}
+	benchmark, ok := doc["benchmark"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected benchmark object: %v", doc)
+	}
+	if benchmark["pass_at_1"] != 0.62 || benchmark["aic"] != 93.0 || benchmark["aic_factor"] != 1.63 {
+		t.Fatalf("unexpected benchmark values: %v", benchmark)
+	}
+	if _, ok := benchmark["tradeoff"]; ok {
+		t.Fatalf("did not expect tradeoff without explain: %v", benchmark)
+	}
+	assertNotContainsAny(t, out, "GPT reasoning level", "Model:", "Pass@1", "AIC factor")
+}
+
+func TestFormatJSONExplainIncludesTradeoff(t *testing.T) {
+	out, err := FormatJSON(anthropicRecommendation(Opus48, "medium", "Good fit."), OptimizeQuality, true)
+	if err != nil {
+		t.Fatalf("expected JSON format to succeed: %v", err)
+	}
+
+	var doc struct {
+		Model     string `json:"model"`
+		Reasoning string `json:"reasoning"`
+		Profile   string `json:"profile"`
+		Benchmark struct {
+			PassAt1  float64 `json:"pass_at_1"`
+			Tradeoff string  `json:"tradeoff"`
+		} `json:"benchmark"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("expected valid JSON, got %q: %v", out, err)
+	}
+	if doc.Model != "claude-opus-4.8" || doc.Reasoning != "medium" || doc.Profile != "quality" {
+		t.Fatalf("unexpected normalized fields: %+v", doc)
+	}
+	if doc.Benchmark.PassAt1 != 0.47 || doc.Benchmark.Tradeoff == "" {
+		t.Fatalf("expected benchmark values and tradeoff: %+v", doc.Benchmark)
+	}
+}
+
+func TestFormatJSONCoversEveryBundledExactBenchmark(t *testing.T) {
+	for key, entry := range bundledBenchmarks {
+		t.Run(key.model+"/"+key.level, func(t *testing.T) {
+			var rec Recommendation
+			switch key.model {
+			case "gpt-5.4":
+				rec = gptRecommendation(GPT54, key.level, "Benchmark-backed recommendation.")
+			case "gpt-5.5":
+				rec = gptRecommendation(GPT55, key.level, "Benchmark-backed recommendation.")
+			case "claude-opus-4.8":
+				rec = anthropicRecommendation(Opus48, key.level, "Benchmark-backed recommendation.")
+			case "claude-sonnet-4.6":
+				rec = anthropicRecommendation(Sonnet46, key.level, "Benchmark-backed recommendation.")
+			default:
+				t.Fatalf("test needs display model mapping for %q", key.model)
+			}
+
+			out, err := FormatJSON(rec, OptimizeValue, true)
+			if err != nil {
+				t.Fatalf("expected JSON format to succeed: %v", err)
+			}
+			expected, err := entry.jsonBenchmark(true)
+			if err != nil {
+				t.Fatalf("expected bundled benchmark to be parseable: %v", err)
+			}
+
+			var doc struct {
+				Benchmark *jsonBenchmark `json:"benchmark"`
+			}
+			if err := json.Unmarshal([]byte(out), &doc); err != nil {
+				t.Fatalf("expected valid JSON, got %q: %v", out, err)
+			}
+			if doc.Benchmark == nil {
+				t.Fatalf("expected benchmark object for exact match %v in %q", key, out)
+			}
+			if *doc.Benchmark != *expected {
+				t.Fatalf("unexpected benchmark values: got %+v want %+v", doc.Benchmark, expected)
+			}
+		})
+	}
+}
+
+func TestFormatJSONOmitsBenchmarkForMissingExactMatch(t *testing.T) {
+	out, err := FormatJSON(gptRecommendation(GPT55, "low", "Lower-reasoning recommendation."), OptimizeSpeed, true)
+	if err != nil {
+		t.Fatalf("expected JSON format to succeed: %v", err)
+	}
+
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("expected valid JSON, got %q: %v", out, err)
+	}
+	if doc["model"] != "gpt-5.5" || doc["reasoning"] != "low" || doc["profile"] != "speed" {
+		t.Fatalf("unexpected normalized fields: %v", doc)
+	}
+	if _, ok := doc["benchmark"]; ok {
+		t.Fatalf("did not expect benchmark for missing exact match: %v", doc)
+	}
+}
+
+func TestFormatJSONRejectsUnnormalizableRecommendations(t *testing.T) {
+	if out, err := FormatJSON(Recommendation{Model: "Mystery", ReasoningSetting: "unknown", Reason: "test"}, OptimizeValue, false); err == nil || out != "" {
+		t.Fatalf("expected normalization error and no partial output, got out=%q err=%v", out, err)
+	}
+	if out, err := FormatJSON(gptRecommendation(GPT55, "medium", "test"), Optimization("cheap"), false); err == nil || out != "" {
+		t.Fatalf("expected profile error and no partial output, got out=%q err=%v", out, err)
+	}
+}
+
 func TestDefaultFormatRemainsBenchmarkFree(t *testing.T) {
 	out := Format(gptRecommendation(GPT55, "high", "Balanced value choice."))
 
@@ -427,8 +549,8 @@ func TestSpeedExplanationDoesNotClaimMeasuredLatencyAdvantage(t *testing.T) {
 	out := FormatWithExplanation(rec)
 	lower := strings.ToLower(out)
 
-	assertContainsAll(t, out, "Pass@1 48%±3%", "the data contains no latency measurements")
-	assertNotContainsAny(t, lower, "empirically faster", "measured faster", "latency advantage")
+	assertContainsAll(t, out, "Pass@1 48%±3%")
+	assertNotContainsAny(t, lower, "empirically faster", "measured faster", "latency advantage", "the data contains no latency measurements")
 }
 
 func TestBuiltInRecommendationsStayWithinHumanOnlyOutputGuardrails(t *testing.T) {
