@@ -576,9 +576,10 @@ func TestFormatWithExplanationAddsExactGPT55BenchmarkValues(t *testing.T) {
 		aic       string
 		aicFactor string
 	}{
-		{level: "medium", passAt1: "48%±3%", aic: "57.0", aicFactor: "1.00"},
-		{level: "high", passAt1: "62%±4%", aic: "93.0", aicFactor: "1.63"},
-		{level: "xhigh", passAt1: "70%±3%", aic: "141.0", aicFactor: "2.47"},
+		{level: "low", passAt1: "27%±2%", aic: "28.2", aicFactor: "1.00"},
+		{level: "medium", passAt1: "54%±3%", aic: "60.0", aicFactor: "2.13"},
+		{level: "high", passAt1: "64%±3%", aic: "93.0", aicFactor: "3.30"},
+		{level: "xhigh", passAt1: "67%±6%", aic: "138.0", aicFactor: "4.89"},
 	}
 
 	for _, tc := range cases {
@@ -598,9 +599,10 @@ func TestFormatWithExplanationAddsExactClaudeBenchmarkValues(t *testing.T) {
 		aic       string
 		aicFactor string
 	}{
-		{name: "opus medium", rec: anthropicRecommendation(Opus48, "medium", "test recommendation"), passAt1: "47%±4%", aic: "100.0", aicFactor: "1.75"},
-		{name: "opus high", rec: anthropicRecommendation(Opus48, "high", "test recommendation"), passAt1: "51%±3%", aic: "120.0", aicFactor: "2.11"},
-		{name: "sonnet high", rec: anthropicRecommendation(Sonnet46, "high", "test recommendation"), passAt1: "32%±2%", aic: "114.0", aicFactor: "2.00"},
+		{name: "opus low", rec: anthropicRecommendation(Opus48, "low", "test recommendation"), passAt1: "41%±1%", aic: "72.5", aicFactor: "2.57"},
+		{name: "opus medium", rec: anthropicRecommendation(Opus48, "medium", "test recommendation"), passAt1: "49%±2%", aic: "102.5", aicFactor: "3.63"},
+		{name: "opus high", rec: anthropicRecommendation(Opus48, "high", "test recommendation"), passAt1: "52%±5%", aic: "125.0", aicFactor: "4.43"},
+		{name: "sonnet high", rec: anthropicRecommendation(Sonnet46, "high", "test recommendation"), passAt1: "30%±4%", aic: "114.0", aicFactor: "4.04"},
 	}
 
 	for _, tc := range cases {
@@ -614,15 +616,15 @@ func TestFormatWithExplanationAddsExactClaudeBenchmarkValues(t *testing.T) {
 
 func TestFormatWithExplanationDoesNotApproximateMissingBenchmarkMatch(t *testing.T) {
 	cases := []Recommendation{
-		gptRecommendation(GPT55, "low", "Lower-reasoning recommendation."),
-		anthropicRecommendation(Opus48, "low", "Low-effort visual recommendation."),
+		gptRecommendation(GPT54, "high", "Unsupported level."),
+		anthropicRecommendation(Sonnet46, "medium", "Unsupported level."),
 	}
 
 	for _, rec := range cases {
 		out := FormatWithExplanation(rec)
 
 		assertHumanOnlyOutput(t, out)
-		assertNotContainsAny(t, out, "Benchmark:", "Pass@1", "AIC ", "AIC factor", "57.0", "48%±3%", "47%±4%", "100.0")
+		assertNotContainsAny(t, out, "Benchmark:", "Pass@1", "AIC ", "AIC factor", "60.0", "54%±3%", "49%±2%", "102.5")
 	}
 }
 
@@ -643,7 +645,7 @@ func TestFormatJSONNormalizesRecommendationAndExactBenchmark(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected benchmark object: %v", doc)
 	}
-	if benchmark["pass_at_1"] != 0.62 || benchmark["aic"] != 93.0 || benchmark["aic_factor"] != 1.63 {
+	if benchmark["pass_at_1"] != 0.64 || benchmark["aic"] != 93.0 || benchmark["aic_factor"] != 3.3 {
 		t.Fatalf("unexpected benchmark values: %v", benchmark)
 	}
 	if _, ok := benchmark["tradeoff"]; ok {
@@ -673,7 +675,7 @@ func TestFormatJSONExplainIncludesTradeoff(t *testing.T) {
 	if doc.Model != "claude-opus-4.8" || doc.Reasoning != "medium" || doc.Profile != "quality" {
 		t.Fatalf("unexpected normalized fields: %+v", doc)
 	}
-	if doc.Benchmark.PassAt1 != 0.47 || doc.Benchmark.Tradeoff == "" {
+	if doc.Benchmark.PassAt1 != 0.49 || doc.Benchmark.Tradeoff == "" {
 		t.Fatalf("expected benchmark values and tradeoff: %+v", doc.Benchmark)
 	}
 }
@@ -727,8 +729,8 @@ func TestFormatJSONOmitsBenchmarkForMissingExactMatch(t *testing.T) {
 		wantModel     string
 		wantReasoning string
 	}{
-		{gptRecommendation(GPT55, "low", "Lower-reasoning recommendation."), OptimizeSpeed, "gpt-5.5", "low"},
-		{anthropicRecommendation(Opus48, "low", "Low-effort visual recommendation."), OptimizeValue, "claude-opus-4.8", "low"},
+		{gptRecommendation(GPT54, "high", "Unsupported level."), OptimizeSpeed, "gpt-5.4", "high"},
+		{anthropicRecommendation(Sonnet46, "medium", "Unsupported level."), OptimizeValue, "claude-sonnet-4.6", "medium"},
 	}
 
 	for _, tc := range cases {
@@ -771,7 +773,7 @@ func TestSpeedExplanationDoesNotClaimMeasuredLatencyAdvantage(t *testing.T) {
 	out := FormatWithExplanation(rec)
 	lower := strings.ToLower(out)
 
-	assertContainsAll(t, out, "Pass@1 48%±3%")
+	assertContainsAll(t, out, "Pass@1 54%±3%")
 	assertNotContainsAny(t, lower, "empirically faster", "measured faster", "latency advantage", "the data contains no latency measurements")
 }
 
