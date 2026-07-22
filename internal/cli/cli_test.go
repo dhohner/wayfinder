@@ -23,7 +23,7 @@ func (s *stubRecommender) RecommendWithOptimizationAgainst(task string, optimiza
 	if s.recommendation != (recommender.Recommendation{}) {
 		return s.recommendation
 	}
-	return recommender.Recommendation{Model: recommender.GPT55, ReasoningSetting: "GPT reasoning level: medium", Reason: "test recommendation"}
+	return recommender.Recommendation{Model: recommender.GPT56Sol, ReasoningSetting: "GPT reasoning level: medium", Reason: "test recommendation"}
 }
 
 func TestRunParsesArgumentsAndWritesRecommendation(t *testing.T) {
@@ -38,7 +38,7 @@ func TestRunParsesArgumentsAndWritesRecommendation(t *testing.T) {
 	if rec.optimization != recommender.OptimizeQuality || rec.against != recommender.AgainstGPT || rec.task != "implement an API" {
 		t.Fatalf("unexpected recommendation input: optimization=%q against=%q task=%q", rec.optimization, rec.against, rec.task)
 	}
-	assertContainsAll(t, stdout.String(), "Model: GPT 5.5", "Reasoning: GPT reasoning level: medium", "Reason: test recommendation")
+	assertContainsAll(t, stdout.String(), "Model: GPT 5.6 Sol", "Reasoning: GPT reasoning level: medium", "Reason: test recommendation")
 	assertNotContainsAny(t, stdout.String(), "Pass@1", "AIC", "AIC factor", "Benchmark:")
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr output, got %q", stderr.String())
@@ -57,7 +57,7 @@ func TestRunExplainAddsBenchmarkRationale(t *testing.T) {
 	if rec.optimization != recommender.OptimizeCost || rec.task != "implement an API" {
 		t.Fatalf("unexpected recommendation input: optimization=%q task=%q", rec.optimization, rec.task)
 	}
-	assertContainsAll(t, stdout.String(), "Pass@1 54%±3%", "AIC 60.0", "AIC factor 2.13", "Tradeoff:")
+	assertContainsAll(t, stdout.String(), "Pass@1 61%±2%", "average cost 1.86", "Tradeoff:")
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr output, got %q", stderr.String())
 	}
@@ -79,7 +79,7 @@ func TestRunJSONWritesOneNormalizedDocument(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &doc); err != nil {
 		t.Fatalf("expected valid JSON, got %q: %v", stdout.String(), err)
 	}
-	if got := doc["model"]; got != "gpt-5.5" {
+	if got := doc["model"]; got != "gpt-5.6-sol" {
 		t.Fatalf("expected normalized model, got %v in %v", got, doc)
 	}
 	if got := doc["reasoning"]; got != "medium" {
@@ -95,7 +95,7 @@ func TestRunJSONWritesOneNormalizedDocument(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected benchmark object in %v", doc)
 	}
-	if benchmark["pass_at_1"] != 0.54 || benchmark["aic"] != 60.0 || benchmark["aic_factor"] != 2.13 {
+	if benchmark["pass_at_1"] != 0.61 || benchmark["average_cost"] != 1.86 {
 		t.Fatalf("unexpected benchmark values: %v", benchmark)
 	}
 	if _, ok := benchmark["tradeoff"]; ok {
@@ -214,7 +214,7 @@ func TestRunUsesDefaultRecommender(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("expected success exit code, got %d: %s", exitCode, stderr.String())
 	}
-	assertContainsAll(t, stdout.String(), "Model: GPT 5.5", "Reasoning: GPT reasoning level: high")
+	assertContainsAll(t, stdout.String(), "Model: GPT 5.6 Sol", "Reasoning: GPT reasoning level: high")
 }
 
 func TestRunAgainstUsesDefaultRecommenderForCodeReview(t *testing.T) {

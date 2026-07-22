@@ -9,8 +9,8 @@ import (
 func TestRecommendReturnsOneSupportedModelAndProviderSetting(t *testing.T) {
 	rec := Recommend("refactor a TypeScript auth module and explain the risk")
 
-	if rec.Model != GPT55 {
-		t.Fatalf("expected %s, got %s", GPT55, rec.Model)
+	if rec.Model != GPT56Sol {
+		t.Fatalf("expected %s, got %s", GPT56Sol, rec.Model)
 	}
 	if rec.ReasoningSetting != "GPT reasoning level: high" {
 		t.Fatalf("unexpected reasoning setting: %q", rec.ReasoningSetting)
@@ -20,7 +20,7 @@ func TestRecommendReturnsOneSupportedModelAndProviderSetting(t *testing.T) {
 	}
 }
 
-func TestRecommendSimpleTaskCanUseLowReasoningGPT55(t *testing.T) {
+func TestRecommendSimpleTaskCanUseLowReasoningGPT56Sol(t *testing.T) {
 	cases := []string{
 		"summarize these release notes",
 		"fix a typo in a README",
@@ -30,8 +30,8 @@ func TestRecommendSimpleTaskCanUseLowReasoningGPT55(t *testing.T) {
 	for _, task := range cases {
 		rec := Recommend(task)
 
-		if rec.Model != GPT55 {
-			t.Fatalf("expected %s for %q, got %s", GPT55, task, rec.Model)
+		if rec.Model != GPT56Sol {
+			t.Fatalf("expected %s for %q, got %s", GPT56Sol, task, rec.Model)
 		}
 		if rec.ReasoningSetting != "GPT reasoning level: low" {
 			t.Fatalf("expected low reasoning for %q, got %q", task, rec.ReasoningSetting)
@@ -39,7 +39,7 @@ func TestRecommendSimpleTaskCanUseLowReasoningGPT55(t *testing.T) {
 	}
 }
 
-func TestRecommendNuancedRoutineTaskUsesGPT55MediumReasoning(t *testing.T) {
+func TestRecommendNuancedRoutineTaskUsesGPT56SolMediumReasoning(t *testing.T) {
 	cases := []string{
 		"rewrite this support reply to be firm but empathetic",
 		"extract requirements from a messy product request",
@@ -49,8 +49,8 @@ func TestRecommendNuancedRoutineTaskUsesGPT55MediumReasoning(t *testing.T) {
 	for _, task := range cases {
 		rec := Recommend(task)
 
-		if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: medium" {
-			t.Fatalf("expected medium-reasoning GPT 5.5 for %q, got %+v", task, rec)
+		if rec.Model != GPT56Sol || rec.ReasoningSetting != "GPT reasoning level: medium" {
+			t.Fatalf("expected medium-reasoning GPT 5.6 Sol for %q, got %+v", task, rec)
 		}
 	}
 }
@@ -58,8 +58,8 @@ func TestRecommendNuancedRoutineTaskUsesGPT55MediumReasoning(t *testing.T) {
 func TestRecommendAmbiguousTaskUsesConservativeOfflineDefault(t *testing.T) {
 	rec := Recommend("help me with this task")
 
-	if rec.Model != GPT55 {
-		t.Fatalf("expected conservative default %s, got %s", GPT55, rec.Model)
+	if rec.Model != GPT56Sol {
+		t.Fatalf("expected conservative default %s, got %s", GPT56Sol, rec.Model)
 	}
 	if rec.ReasoningSetting != "GPT reasoning level: medium" {
 		t.Fatalf("expected GPT medium reasoning, got %q", rec.ReasoningSetting)
@@ -71,7 +71,7 @@ func TestZeroValueServiceUsesBundledDefaults(t *testing.T) {
 
 	rec := svc.Recommend("help me with this task")
 
-	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: medium" {
+	if rec.Model != GPT56Sol || rec.ReasoningSetting != "GPT reasoning level: medium" {
 		t.Fatalf("expected zero-value service to use bundled defaults, got %+v", rec)
 	}
 }
@@ -79,8 +79,8 @@ func TestZeroValueServiceUsesBundledDefaults(t *testing.T) {
 func TestRecommendRoutineCodingTaskUsesMediumValueDefault(t *testing.T) {
 	rec := Recommend("implement a Go API endpoint")
 
-	if rec.Model != GPT55 {
-		t.Fatalf("expected %s, got %s", GPT55, rec.Model)
+	if rec.Model != GPT56Sol {
+		t.Fatalf("expected %s, got %s", GPT56Sol, rec.Model)
 	}
 	if rec.ReasoningSetting != "GPT reasoning level: medium" {
 		t.Fatalf("expected GPT medium reasoning, got %q", rec.ReasoningSetting)
@@ -100,7 +100,7 @@ Acceptance criteria:
 
 	rec := Recommend(task)
 
-	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: medium" {
+	if rec.Model != GPT56Sol || rec.ReasoningSetting != "GPT reasoning level: medium" {
 		t.Fatalf("expected routine coding path for implementation issue, got %+v", rec)
 	}
 }
@@ -122,7 +122,7 @@ func TestVisualDesignOptimizationMatrix(t *testing.T) {
 		{OptimizeValue, "Anthropic Effort Level: low"},
 		{OptimizeCost, "Anthropic Effort Level: low"},
 		{OptimizeSpeed, "Anthropic Effort Level: low"},
-		{OptimizeQuality, "Anthropic Effort Level: medium"},
+		{OptimizeQuality, "Anthropic Effort Level: high"},
 	}
 
 	for _, task := range tasks {
@@ -151,7 +151,7 @@ func TestVisualDesignPathDoesNotCaptureCodingOrTechnicalDesign(t *testing.T) {
 	for _, task := range cases {
 		t.Run(task, func(t *testing.T) {
 			rec := RecommendWithOptimization(task, OptimizeValue)
-			if rec.Model != GPT55 || !strings.HasPrefix(rec.ReasoningSetting, "GPT reasoning level:") {
+			if rec.Model != GPT56Sol || !strings.HasPrefix(rec.ReasoningSetting, "GPT reasoning level:") {
 				t.Fatalf("expected GPT coding or reasoning path for %q, got %+v", task, rec)
 			}
 		})
@@ -161,7 +161,7 @@ func TestVisualDesignPathDoesNotCaptureCodingOrTechnicalDesign(t *testing.T) {
 func TestBrandVoiceDoesNotEnterVisualDesignPath(t *testing.T) {
 	rec := RecommendWithOptimization("edit this editorial speech for brand voice", OptimizeValue)
 
-	if rec.Model != Opus48 || rec.ReasoningSetting != "Anthropic Effort Level: medium" {
+	if rec.Model != Opus48 || rec.ReasoningSetting != "Anthropic Effort Level: low" {
 		t.Fatalf("expected brand voice writing to stay on long-form Anthropic fit path, got %+v", rec)
 	}
 }
@@ -179,7 +179,7 @@ func TestAnthropicRecommendationsUseEffortLevelTerminology(t *testing.T) {
 			task:         "summarize a long document into a research brief",
 			optimization: OptimizeValue,
 			wantModel:    Opus48,
-			wantEffort:   "Anthropic Effort Level: medium",
+			wantEffort:   "Anthropic Effort Level: low",
 		},
 		{
 			name:         "opus quality",
@@ -241,7 +241,7 @@ func TestProviderTerminologyMatchesSelectedModelFamily(t *testing.T) {
 func TestProviderForModelClassifiesSupportedFamilies(t *testing.T) {
 	cases := map[string]providerFamily{
 		GPT54:    providerGPT,
-		GPT55:    providerGPT,
+		GPT56Sol: providerGPT,
 		Opus48:   providerAnthropic,
 		Sonnet46: providerAnthropic,
 	}
@@ -256,16 +256,16 @@ func TestProviderForModelClassifiesSupportedFamilies(t *testing.T) {
 func TestRecommendComplexDevelopmentTaskRaisesReasoning(t *testing.T) {
 	rec := Recommend("debug an intermittent distributed race condition in production")
 
-	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: high" {
-		t.Fatalf("expected high-reasoning %s for complex task, got %+v", GPT55, rec)
+	if rec.Model != GPT56Sol || rec.ReasoningSetting != "GPT reasoning level: high" {
+		t.Fatalf("expected high-reasoning %s for complex task, got %+v", GPT56Sol, rec)
 	}
 }
 
 func TestOptimizeQualityRaisesRoutineCodingToHigh(t *testing.T) {
 	rec := RecommendWithOptimization("implement a Go API endpoint", OptimizeQuality)
 
-	if rec.Model != GPT55 {
-		t.Fatalf("expected stronger model %s, got %s", GPT55, rec.Model)
+	if rec.Model != GPT56Sol {
+		t.Fatalf("expected stronger model %s, got %s", GPT56Sol, rec.Model)
 	}
 	if rec.ReasoningSetting != "GPT reasoning level: high" {
 		t.Fatalf("expected quality optimization to raise routine coding reasoning, got %q", rec.ReasoningSetting)
@@ -275,32 +275,32 @@ func TestOptimizeQualityRaisesRoutineCodingToHigh(t *testing.T) {
 func TestOptimizeCostKeepsDefaultModelForModerateTask(t *testing.T) {
 	rec := RecommendWithOptimization("implement a Go API endpoint", OptimizeCost)
 
-	if rec.Model != GPT55 {
-		t.Fatalf("expected default model %s, got %s", GPT55, rec.Model)
+	if rec.Model != GPT56Sol {
+		t.Fatalf("expected default model %s, got %s", GPT56Sol, rec.Model)
 	}
 }
 
 func TestOptimizeSpeedKeepsConservativeReasoningForAmbiguousTask(t *testing.T) {
 	rec := RecommendWithOptimization("help me with this task", OptimizeSpeed)
 
-	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: medium" {
-		t.Fatalf("expected medium-reasoning GPT 5.5, got %+v", rec)
+	if rec.Model != GPT56Sol || rec.ReasoningSetting != "GPT reasoning level: medium" {
+		t.Fatalf("expected medium-reasoning GPT 5.6 Sol, got %+v", rec)
 	}
 }
 
 func TestOptimizeSpeedKeepsCodingCapabilityForModerateCodingTask(t *testing.T) {
 	rec := RecommendWithOptimization("implement a Go API endpoint", OptimizeSpeed)
 
-	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: medium" {
-		t.Fatalf("expected speed optimization to keep medium-reasoning GPT 5.5 for coding, got %+v", rec)
+	if rec.Model != GPT56Sol || rec.ReasoningSetting != "GPT reasoning level: medium" {
+		t.Fatalf("expected speed optimization to keep medium-reasoning GPT 5.6 Sol for coding, got %+v", rec)
 	}
 }
 
 func TestOptimizeQualityDoesNotRaiseSimpleNonCodingTask(t *testing.T) {
 	rec := RecommendWithOptimization("summarize these release notes", OptimizeQuality)
 
-	if rec.Model != GPT55 {
-		t.Fatalf("expected quality optimization to keep GPT 5.5 for simple task, got %s", rec.Model)
+	if rec.Model != GPT56Sol {
+		t.Fatalf("expected quality optimization to keep GPT 5.6 Sol for simple task, got %s", rec.Model)
 	}
 	if rec.ReasoningSetting != "GPT reasoning level: low" {
 		t.Fatalf("expected low reasoning for simple non-coding task, got %q", rec.ReasoningSetting)
@@ -310,7 +310,7 @@ func TestOptimizeQualityDoesNotRaiseSimpleNonCodingTask(t *testing.T) {
 func TestOptimizationDoesNotOverrideHighRiskComplexity(t *testing.T) {
 	rec := RecommendWithOptimization("analyze a production authentication incident", OptimizeCost)
 
-	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: high" {
+	if rec.Model != GPT56Sol || rec.ReasoningSetting != "GPT reasoning level: high" {
 		t.Fatalf("expected high-risk task to keep high-quality recommendation, got %+v", rec)
 	}
 }
@@ -323,8 +323,8 @@ func TestCodeReviewAgainstChoosesOppositeFamily(t *testing.T) {
 		wantLevel string
 	}{
 		{name: "against gpt", against: AgainstGPT, wantModel: Opus48, wantLevel: "Anthropic Effort Level: high"},
-		{name: "against claude", against: AgainstClaude, wantModel: GPT55, wantLevel: "GPT reasoning level: high"},
-		{name: "default reviewer", against: AgainstUnspecified, wantModel: GPT55, wantLevel: "GPT reasoning level: high"},
+		{name: "against claude", against: AgainstClaude, wantModel: GPT56Sol, wantLevel: "GPT reasoning level: high"},
+		{name: "default reviewer", against: AgainstUnspecified, wantModel: GPT56Sol, wantLevel: "GPT reasoning level: high"},
 	}
 
 	for _, tc := range cases {
@@ -345,14 +345,14 @@ func TestCodeReviewOptimizationMatrix(t *testing.T) {
 		wantModel  string
 		wantReason string
 	}{
-		{name: "claude cost", against: AgainstGPT, profile: OptimizeCost, wantModel: Opus48, wantReason: "Anthropic Effort Level: medium"},
-		{name: "claude speed", against: AgainstGPT, profile: OptimizeSpeed, wantModel: Opus48, wantReason: "Anthropic Effort Level: medium"},
+		{name: "claude cost", against: AgainstGPT, profile: OptimizeCost, wantModel: Opus48, wantReason: "Anthropic Effort Level: low"},
+		{name: "claude speed", against: AgainstGPT, profile: OptimizeSpeed, wantModel: Opus48, wantReason: "Anthropic Effort Level: low"},
 		{name: "claude value", against: AgainstGPT, profile: OptimizeValue, wantModel: Opus48, wantReason: "Anthropic Effort Level: high"},
-		{name: "claude quality", against: AgainstGPT, profile: OptimizeQuality, wantModel: Opus48, wantReason: "Anthropic Effort Level: xhigh"},
-		{name: "gpt cost", against: AgainstClaude, profile: OptimizeCost, wantModel: GPT55, wantReason: "GPT reasoning level: medium"},
-		{name: "gpt speed", against: AgainstClaude, profile: OptimizeSpeed, wantModel: GPT55, wantReason: "GPT reasoning level: medium"},
-		{name: "gpt value", against: AgainstClaude, profile: OptimizeValue, wantModel: GPT55, wantReason: "GPT reasoning level: high"},
-		{name: "gpt quality", against: AgainstClaude, profile: OptimizeQuality, wantModel: GPT55, wantReason: "GPT reasoning level: xhigh"},
+		{name: "claude quality", against: AgainstGPT, profile: OptimizeQuality, wantModel: Opus48, wantReason: "Anthropic Effort Level: high"},
+		{name: "gpt cost", against: AgainstClaude, profile: OptimizeCost, wantModel: GPT56Sol, wantReason: "GPT reasoning level: medium"},
+		{name: "gpt speed", against: AgainstClaude, profile: OptimizeSpeed, wantModel: GPT56Sol, wantReason: "GPT reasoning level: medium"},
+		{name: "gpt value", against: AgainstClaude, profile: OptimizeValue, wantModel: GPT56Sol, wantReason: "GPT reasoning level: high"},
+		{name: "gpt quality", against: AgainstClaude, profile: OptimizeQuality, wantModel: GPT56Sol, wantReason: "GPT reasoning level: xhigh"},
 	}
 
 	for _, tc := range cases {
@@ -383,23 +383,23 @@ func TestCodeReviewClassifierRecognizesAuditAndSecurityReviewPhrasing(t *testing
 
 func TestAgainstDoesNotOverrideNonCodeReviewSelection(t *testing.T) {
 	rec := RecommendWithOptimizationAgainst("summarize a long document into a research brief", OptimizeValue, AgainstGPT)
-	if rec.Model != Opus48 || rec.ReasoningSetting != "Anthropic Effort Level: medium" {
+	if rec.Model != Opus48 || rec.ReasoningSetting != "Anthropic Effort Level: low" {
 		t.Fatalf("expected normal non-review recommendation to ignore --against, got %+v", rec)
 	}
 
 	rec = RecommendWithOptimizationAgainst("fix a typo in a README", OptimizeValue, AgainstGPT)
-	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: low" {
+	if rec.Model != GPT56Sol || rec.ReasoningSetting != "GPT reasoning level: low" {
 		t.Fatalf("expected simple coding recommendation to ignore --against, got %+v", rec)
 	}
 }
 
 func TestCodeReviewHumanOutputUsesSelectedProviderTerminology(t *testing.T) {
 	claudeReview := Format(RecommendWithOptimizationAgainst("code review this Go implementation", OptimizeQuality, AgainstGPT))
-	assertContainsAll(t, claudeReview, "Model: Opus 4.8", "Reasoning: Anthropic Effort Level: xhigh")
+	assertContainsAll(t, claudeReview, "Model: Opus 4.8", "Reasoning: Anthropic Effort Level: high")
 	assertNotContainsAny(t, claudeReview, "GPT reasoning level")
 
 	gptReview := Format(RecommendWithOptimizationAgainst("code review this Go implementation", OptimizeQuality, AgainstClaude))
-	assertContainsAll(t, gptReview, "Model: GPT 5.5", "Reasoning: GPT reasoning level: xhigh")
+	assertContainsAll(t, gptReview, "Model: GPT 5.6 Sol", "Reasoning: GPT reasoning level: xhigh")
 	assertNotContainsAny(t, gptReview, "Anthropic Effort Level")
 }
 
@@ -424,8 +424,8 @@ func TestCodingBenchmarkOptimizationMatrix(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := RecommendWithOptimization(tc.task, tc.optimization)
-			if rec.Model != GPT55 || rec.ReasoningSetting != tc.want {
-				t.Fatalf("expected %s with %s, got %+v", GPT55, tc.want, rec)
+			if rec.Model != GPT56Sol || rec.ReasoningSetting != tc.want {
+				t.Fatalf("expected %s with %s, got %+v", GPT56Sol, tc.want, rec)
 			}
 		})
 	}
@@ -445,7 +445,7 @@ func TestRoutineCodingFeatureWorkUsesMediumReasoning(t *testing.T) {
 
 	for _, task := range cases {
 		rec := RecommendWithOptimization(task, OptimizeValue)
-		if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: medium" {
+		if rec.Model != GPT56Sol || rec.ReasoningSetting != "GPT reasoning level: medium" {
 			t.Fatalf("expected routine coding feature work to use medium reasoning for %q, got %+v", task, rec)
 		}
 	}
@@ -454,7 +454,7 @@ func TestRoutineCodingFeatureWorkUsesMediumReasoning(t *testing.T) {
 func TestCodeReviewFeatureImplementationIsNotClassifiedAsReview(t *testing.T) {
 	rec := RecommendWithOptimizationAgainst("add adversarial code review model selection and --against parsing", OptimizeValue, AgainstGPT)
 
-	if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: medium" {
+	if rec.Model != GPT56Sol || rec.ReasoningSetting != "GPT reasoning level: medium" {
 		t.Fatalf("expected code-review feature implementation to stay on routine coding path, got %+v", rec)
 	}
 }
@@ -470,7 +470,7 @@ func TestCorrectnessHeavyCodingIsNotSimpleCoding(t *testing.T) {
 
 	for _, task := range cases {
 		rec := RecommendWithOptimization(task, OptimizeValue)
-		if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: high" {
+		if rec.Model != GPT56Sol || rec.ReasoningSetting != "GPT reasoning level: high" {
 			t.Fatalf("expected correctness-heavy task to use substantive coding path for %q, got %+v", task, rec)
 		}
 	}
@@ -484,8 +484,8 @@ func TestOptimizeQualityUsesXHighForHighRiskOrComplexTasks(t *testing.T) {
 
 	for _, task := range cases {
 		rec := RecommendWithOptimization(task, OptimizeQuality)
-		if rec.Model != GPT55 || rec.ReasoningSetting != "GPT reasoning level: xhigh" {
-			t.Fatalf("expected xhigh GPT 5.5 for %q, got %+v", task, rec)
+		if rec.Model != GPT56Sol || rec.ReasoningSetting != "GPT reasoning level: xhigh" {
+			t.Fatalf("expected xhigh GPT 5.6 Sol for %q, got %+v", task, rec)
 		}
 	}
 }
@@ -569,48 +569,23 @@ func TestFormatContainsOneRecommendationOnly(t *testing.T) {
 	assertHumanOnlyOutput(t, out)
 }
 
-func TestFormatWithExplanationAddsExactGPT55BenchmarkValues(t *testing.T) {
-	cases := []struct {
-		level     string
-		passAt1   string
-		aic       string
-		aicFactor string
-	}{
-		{level: "low", passAt1: "27%±2%", aic: "28.2", aicFactor: "1.00"},
-		{level: "medium", passAt1: "54%±3%", aic: "60.0", aicFactor: "2.13"},
-		{level: "high", passAt1: "64%±3%", aic: "93.0", aicFactor: "3.30"},
-		{level: "xhigh", passAt1: "67%±6%", aic: "138.0", aicFactor: "4.89"},
+func TestFormatWithExplanationAddsExactGPT56SolBenchmarkValues(t *testing.T) {
+	cases := []struct{ level, passAt1, averageCost string }{
+		{"low", "45%±2%", "1.07"}, {"medium", "61%±2%", "1.86"}, {"high", "69%±1%", "3.47"}, {"xhigh", "71%±1%", "4.70"}, {"max", "73%±3%", "8.39"},
 	}
-
 	for _, tc := range cases {
-		t.Run(tc.level, func(t *testing.T) {
-			out := FormatWithExplanation(gptRecommendation(GPT55, tc.level, "test recommendation"))
-
-			assertContainsAll(t, out, "Pass@1 "+tc.passAt1, "AIC "+tc.aic, "AIC factor "+tc.aicFactor, "Tradeoff:")
-		})
+		out := FormatWithExplanation(gptRecommendation(GPT56Sol, tc.level, "test recommendation"))
+		assertContainsAll(t, out, "Pass@1 "+tc.passAt1, "average cost "+tc.averageCost, "Tradeoff:")
 	}
 }
 
 func TestFormatWithExplanationAddsExactClaudeBenchmarkValues(t *testing.T) {
-	cases := []struct {
-		name      string
-		rec       Recommendation
-		passAt1   string
-		aic       string
-		aicFactor string
-	}{
-		{name: "opus low", rec: anthropicRecommendation(Opus48, "low", "test recommendation"), passAt1: "41%±1%", aic: "72.5", aicFactor: "2.57"},
-		{name: "opus medium", rec: anthropicRecommendation(Opus48, "medium", "test recommendation"), passAt1: "49%±2%", aic: "102.5", aicFactor: "3.63"},
-		{name: "opus high", rec: anthropicRecommendation(Opus48, "high", "test recommendation"), passAt1: "52%±5%", aic: "125.0", aicFactor: "4.43"},
-		{name: "sonnet high", rec: anthropicRecommendation(Sonnet46, "high", "test recommendation"), passAt1: "30%±4%", aic: "114.0", aicFactor: "4.04"},
+	cases := []struct{ level, passAt1, averageCost string }{
+		{"low", "41%±1%", "2.29"}, {"medium", "49%±2%", "3.44"}, {"high", "52%±5%", "4.28"}, {"xhigh", "54%±4%", "8.01"}, {"max", "59%±2%", "13.22"},
 	}
-
 	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			out := FormatWithExplanation(tc.rec)
-
-			assertContainsAll(t, out, "Pass@1 "+tc.passAt1, "AIC "+tc.aic, "AIC factor "+tc.aicFactor, "Tradeoff:")
-		})
+		out := FormatWithExplanation(anthropicRecommendation(Opus48, tc.level, "test recommendation"))
+		assertContainsAll(t, out, "Pass@1 "+tc.passAt1, "average cost "+tc.averageCost, "Tradeoff:")
 	}
 }
 
@@ -624,12 +599,12 @@ func TestFormatWithExplanationDoesNotApproximateMissingBenchmarkMatch(t *testing
 		out := FormatWithExplanation(rec)
 
 		assertHumanOnlyOutput(t, out)
-		assertNotContainsAny(t, out, "Benchmark:", "Pass@1", "AIC ", "AIC factor", "60.0", "54%±3%", "49%±2%", "102.5")
+		assertNotContainsAny(t, out, "Benchmark:", "Pass@1", "AIC ", "AIC factor", "60.0", "61%±2%", "49%±2%", "102.5")
 	}
 }
 
 func TestFormatJSONNormalizesRecommendationAndExactBenchmark(t *testing.T) {
-	out, err := FormatJSON(gptRecommendation(GPT55, "high", "Balanced value choice."), OptimizeValue, false)
+	out, err := FormatJSON(gptRecommendation(GPT56Sol, "high", "Balanced value choice."), OptimizeValue, false)
 	if err != nil {
 		t.Fatalf("expected JSON format to succeed: %v", err)
 	}
@@ -638,14 +613,14 @@ func TestFormatJSONNormalizesRecommendationAndExactBenchmark(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &doc); err != nil {
 		t.Fatalf("expected valid JSON, got %q: %v", out, err)
 	}
-	if doc["model"] != "gpt-5.5" || doc["reasoning"] != "high" || doc["profile"] != "value" || doc["reason"] != "Balanced value choice." {
+	if doc["model"] != "gpt-5.6-sol" || doc["reasoning"] != "high" || doc["profile"] != "value" || doc["reason"] != "Balanced value choice." {
 		t.Fatalf("unexpected normalized document: %v", doc)
 	}
 	benchmark, ok := doc["benchmark"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected benchmark object: %v", doc)
 	}
-	if benchmark["pass_at_1"] != 0.64 || benchmark["aic"] != 93.0 || benchmark["aic_factor"] != 3.3 {
+	if benchmark["pass_at_1"] != 0.69 || benchmark["average_cost"] != 3.47 {
 		t.Fatalf("unexpected benchmark values: %v", benchmark)
 	}
 	if _, ok := benchmark["tradeoff"]; ok {
@@ -655,7 +630,7 @@ func TestFormatJSONNormalizesRecommendationAndExactBenchmark(t *testing.T) {
 }
 
 func TestFormatJSONExplainIncludesTradeoff(t *testing.T) {
-	out, err := FormatJSON(anthropicRecommendation(Opus48, "medium", "Good fit."), OptimizeQuality, true)
+	out, err := FormatJSON(anthropicRecommendation(Opus48, "high", "Good fit."), OptimizeQuality, true)
 	if err != nil {
 		t.Fatalf("expected JSON format to succeed: %v", err)
 	}
@@ -672,10 +647,10 @@ func TestFormatJSONExplainIncludesTradeoff(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &doc); err != nil {
 		t.Fatalf("expected valid JSON, got %q: %v", out, err)
 	}
-	if doc.Model != "claude-opus-4.8" || doc.Reasoning != "medium" || doc.Profile != "quality" {
+	if doc.Model != "claude-opus-4.8" || doc.Reasoning != "high" || doc.Profile != "quality" {
 		t.Fatalf("unexpected normalized fields: %+v", doc)
 	}
-	if doc.Benchmark.PassAt1 != 0.49 || doc.Benchmark.Tradeoff == "" {
+	if doc.Benchmark.PassAt1 != 0.52 || doc.Benchmark.Tradeoff == "" {
 		t.Fatalf("expected benchmark values and tradeoff: %+v", doc.Benchmark)
 	}
 }
@@ -687,8 +662,8 @@ func TestFormatJSONCoversEveryBundledExactBenchmark(t *testing.T) {
 			switch key.model {
 			case "gpt-5.4":
 				rec = gptRecommendation(GPT54, key.level, "Benchmark-backed recommendation.")
-			case "gpt-5.5":
-				rec = gptRecommendation(GPT55, key.level, "Benchmark-backed recommendation.")
+			case "gpt-5.6-sol":
+				rec = gptRecommendation(GPT56Sol, key.level, "Benchmark-backed recommendation.")
 			case "claude-opus-4.8":
 				rec = anthropicRecommendation(Opus48, key.level, "Benchmark-backed recommendation.")
 			case "claude-sonnet-4.6":
@@ -756,13 +731,13 @@ func TestFormatJSONRejectsUnnormalizableRecommendations(t *testing.T) {
 	if out, err := FormatJSON(Recommendation{Model: "Mystery", ReasoningSetting: "unknown", Reason: "test"}, OptimizeValue, false); err == nil || out != "" {
 		t.Fatalf("expected normalization error and no partial output, got out=%q err=%v", out, err)
 	}
-	if out, err := FormatJSON(gptRecommendation(GPT55, "medium", "test"), Optimization("cheap"), false); err == nil || out != "" {
+	if out, err := FormatJSON(gptRecommendation(GPT56Sol, "medium", "test"), Optimization("cheap"), false); err == nil || out != "" {
 		t.Fatalf("expected profile error and no partial output, got out=%q err=%v", out, err)
 	}
 }
 
 func TestDefaultFormatRemainsBenchmarkFree(t *testing.T) {
-	out := Format(gptRecommendation(GPT55, "high", "Balanced value choice."))
+	out := Format(gptRecommendation(GPT56Sol, "high", "Balanced value choice."))
 
 	assertHumanOnlyOutput(t, out)
 	assertNotContainsAny(t, out, "Pass@1", "AIC", "AIC factor", "Tradeoff", "Benchmark:")
@@ -773,7 +748,7 @@ func TestSpeedExplanationDoesNotClaimMeasuredLatencyAdvantage(t *testing.T) {
 	out := FormatWithExplanation(rec)
 	lower := strings.ToLower(out)
 
-	assertContainsAll(t, out, "Pass@1 54%±3%")
+	assertContainsAll(t, out, "Pass@1 61%±2%")
 	assertNotContainsAny(t, lower, "empirically faster", "measured faster", "latency advantage", "the data contains no latency measurements")
 }
 
@@ -793,6 +768,24 @@ func TestBuiltInRecommendationsStayWithinHumanOnlyOutputGuardrails(t *testing.T)
 		for _, optimization := range optimizations {
 			out := Format(RecommendWithOptimization(task, optimization))
 			assertHumanOnlyOutput(t, out)
+		}
+	}
+}
+
+func TestBuiltInRecommendationsAvoidMaxEffort(t *testing.T) {
+	tasks := []string{
+		"implement a Go API endpoint",
+		"debug an intermittent distributed race condition in production",
+		"review this pull request for bugs",
+		"create a UI design wireframe for onboarding",
+		"summarize a long document into a research brief",
+	}
+	for _, task := range tasks {
+		for _, optimization := range []Optimization{OptimizeValue, OptimizeQuality, OptimizeCost, OptimizeSpeed} {
+			rec := RecommendWithOptimizationAgainst(task, optimization, AgainstGPT)
+			if strings.HasSuffix(rec.ReasoningSetting, ": max") {
+				t.Fatalf("must not recommend max effort for %q with %q: %+v", task, optimization, rec)
+			}
 		}
 	}
 }

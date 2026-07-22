@@ -3,10 +3,11 @@ package recommender
 import "strings"
 
 const (
-	// GPT54 and Sonnet46 remain supported for provider classification, but built-in
-	// recommendations prefer newer defaults unless a future rule explicitly opts in.
+	// Older models remain supported for compatibility, but bundled rules select
+	// the current benchmark leaders.
 	GPT54    = "GPT 5.4"
 	GPT55    = "GPT 5.5"
+	GPT56Sol = "GPT 5.6 Sol"
 	Opus48   = "Opus 4.8"
 	Sonnet46 = "Sonnet 4.6"
 )
@@ -137,12 +138,12 @@ func (s Service) RecommendWithOptimizationAgainst(task string, optimization Opti
 }
 
 func defaultRecommendation() Recommendation {
-	return gptRecommendation(GPT55, "medium", "Conservative default for an ambiguous task: enough reasoning for unclear work.")
+	return gptRecommendation(GPT56Sol, "medium", "Conservative default for an ambiguous task: strong value with enough reasoning for unclear work.")
 }
 
 func providerForModel(model string) providerFamily {
 	switch model {
-	case GPT54, GPT55:
+	case GPT54, GPT55, GPT56Sol:
 		return providerGPT
 	case Opus48, Sonnet46:
 		return providerAnthropic

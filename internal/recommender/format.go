@@ -7,32 +7,22 @@ import (
 	"strings"
 )
 
-// Format renders the v1 human-facing output contract: one model, one setting, one reason.
+// Format renders the human-facing output contract: one model, one setting, one reason.
 func Format(rec Recommendation) string {
 	return fmt.Sprintf("Model: %s\nReasoning: %s\nReason: %s", rec.Model, rec.ReasoningSetting, rec.Reason)
 }
 
-// FormatWithExplanation renders the default human output plus exact bundled benchmark evidence when available.
-// Recommendations without an exact benchmark match keep the compact output and do not show benchmark details.
+// FormatWithExplanation renders the default output plus exact bundled benchmark evidence.
 func FormatWithExplanation(rec Recommendation) string {
 	out := Format(rec)
 	entry, ok := benchmarkForRecommendation(rec)
 	if !ok {
 		return out
 	}
-
-	return fmt.Sprintf(
-		"%s\nBenchmark: Pass@1 %s; AIC %s; AIC factor %s.\nTradeoff: %s",
-		out,
-		entry.passAt1,
-		entry.aic,
-		entry.aicFactor,
-		entry.tradeoff,
-	)
+	return fmt.Sprintf("%s\nBenchmark: Pass@1 %s; average cost %s.\nTradeoff: %s", out, entry.passAt1, entry.averageCost, entry.tradeoff)
 }
 
 // FormatJSON renders a stable machine-readable recommendation document.
-// Benchmark fields are included only for exact bundled benchmark matches.
 func FormatJSON(rec Recommendation, profile Optimization, explain bool) (string, error) {
 	model, ok := benchmarkModelID(rec.Model)
 	if !ok {
@@ -47,12 +37,7 @@ func FormatJSON(rec Recommendation, profile Optimization, explain bool) (string,
 		return "", fmt.Errorf("cannot render JSON recommendation for unsupported profile %q", profile)
 	}
 
-	out := jsonRecommendation{
-		Model:     model,
-		Reasoning: reasoning,
-		Profile:   profileValue,
-		Reason:    rec.Reason,
-	}
+	out := jsonRecommendation{Model: model, Reasoning: reasoning, Profile: profileValue, Reason: rec.Reason}
 	if entry, ok := benchmarkForRecommendation(rec); ok {
 		benchmark, err := entry.jsonBenchmark(explain)
 		if err != nil {
@@ -60,7 +45,6 @@ func FormatJSON(rec Recommendation, profile Optimization, explain bool) (string,
 		}
 		out.Benchmark = benchmark
 	}
-
 	data, err := json.Marshal(out)
 	if err != nil {
 		return "", err
@@ -86,10 +70,9 @@ type jsonRecommendation struct {
 }
 
 type jsonBenchmark struct {
-	PassAt1   float64 `json:"pass_at_1"`
-	AIC       float64 `json:"aic"`
-	AICFactor float64 `json:"aic_factor"`
-	Tradeoff  string  `json:"tradeoff,omitempty"`
+	PassAt1     float64 `json:"pass_at_1"`
+	AverageCost float64 `json:"average_cost"`
+	Tradeoff    string  `json:"tradeoff,omitempty"`
 }
 
 func (entry benchmarkEntry) jsonBenchmark(explain bool) (*jsonBenchmark, error) {
@@ -97,16 +80,11 @@ func (entry benchmarkEntry) jsonBenchmark(explain bool) (*jsonBenchmark, error) 
 	if err != nil {
 		return nil, err
 	}
-	aic, err := parseBenchmarkFloat("aic", entry.aic)
+	averageCost, err := parseBenchmarkFloat("average_cost", entry.averageCost)
 	if err != nil {
 		return nil, err
 	}
-	aicFactor, err := parseBenchmarkFloat("aic_factor", entry.aicFactor)
-	if err != nil {
-		return nil, err
-	}
-
-	benchmark := &jsonBenchmark{PassAt1: passAt1, AIC: aic, AICFactor: aicFactor}
+	benchmark := &jsonBenchmark{PassAt1: passAt1, AverageCost: averageCost}
 	if explain {
 		benchmark.Tradeoff = entry.tradeoff
 	}
@@ -134,26 +112,17 @@ func parseBenchmarkFloat(name, value string) (float64, error) {
 }
 
 func gptRecommendation(model, level, reason string) Recommendation {
-	return Recommendation{
-		Model:            model,
-		ReasoningSetting: "GPT reasoning level: " + level,
-		Reason:           reason,
-	}
+	return Recommendation{Model: model, ReasoningSetting: "GPT reasoning level: " + level, Reason: reason}
 }
 
 func anthropicRecommendation(model, level, reason string) Recommendation {
-	return Recommendation{
-		Model:            model,
-		ReasoningSetting: "Anthropic Effort Level: " + level,
-		Reason:           reason,
-	}
+	return Recommendation{Model: model, ReasoningSetting: "Anthropic Effort Level: " + level, Reason: reason}
 }
 
 type benchmarkEntry struct {
-	passAt1   string
-	aic       string
-	aicFactor string
-	tradeoff  string
+	passAt1     string
+	averageCost string
+	tradeoff    string
 }
 
 type benchmarkKey struct {
@@ -162,72 +131,16 @@ type benchmarkKey struct {
 }
 
 var bundledBenchmarks = map[benchmarkKey]benchmarkEntry{
-	{model: "gpt-5.4", level: "xhigh"}: {
-		passAt1:   "52%±2%",
-		aic:       "106.5",
-		aicFactor: "3.78",
-		tradeoff:  "Lower Pass@1 than GPT 5.5 high with higher estimated output-credit use.",
-	},
-	{model: "gpt-5.5", level: "low"}: {
-		passAt1:   "27%±2%",
-		aic:       "28.2",
-		aicFactor: "1.00",
-		tradeoff:  "Lowest estimated output-credit use in the bundled benchmark, but much lower Pass@1 than higher-reasoning GPT 5.5 options.",
-	},
-	{model: "gpt-5.5", level: "medium"}: {
-		passAt1:   "54%±3%",
-		aic:       "60.0",
-		aicFactor: "2.13",
-		tradeoff:  "Best value on the GPT 5.5 frontier: a large quality gain over low for a modest credit increase.",
-	},
-	{model: "gpt-5.5", level: "high"}: {
-		passAt1:   "64%±3%",
-		aic:       "93.0",
-		aicFactor: "3.30",
-		tradeoff:  "Best default balance on the GPT 5.5 frontier, avoiding the xhigh credit jump for a small quality gain.",
-	},
-	{model: "gpt-5.5", level: "xhigh"}: {
-		passAt1:   "67%±6%",
-		aic:       "138.0",
-		aicFactor: "4.89",
-		tradeoff:  "Highest available Pass@1 in the bundled benchmark, with substantially higher estimated output-credit use than high.",
-	},
-	{model: "claude-opus-4.8", level: "low"}: {
-		passAt1:   "41%±1%",
-		aic:       "72.5",
-		aicFactor: "2.57",
-		tradeoff:  "Lowest estimated output-credit use among Claude Opus 4.8 entries, with lower Pass@1 than medium or high.",
-	},
-	{model: "claude-opus-4.8", level: "medium"}: {
-		passAt1:   "49%±2%",
-		aic:       "102.5",
-		aicFactor: "3.63",
-		tradeoff:  "Lower Pass@1 than Claude high with lower estimated output-credit use.",
-	},
-	{model: "claude-opus-4.8", level: "high"}: {
-		passAt1:   "52%±5%",
-		aic:       "125.0",
-		aicFactor: "4.43",
-		tradeoff:  "Best bundled Claude quality/credit balance, with much lower estimated output-credit use than Claude xhigh or max.",
-	},
-	{model: "claude-opus-4.8", level: "xhigh"}: {
-		passAt1:   "54%±4%",
-		aic:       "215.0",
-		aicFactor: "7.62",
-		tradeoff:  "Slightly higher Claude Pass@1 than high, with substantially higher estimated output-credit use.",
-	},
-	{model: "claude-opus-4.8", level: "max"}: {
-		passAt1:   "59%±2%",
-		aic:       "337.5",
-		aicFactor: "11.97",
-		tradeoff:  "Highest Claude Opus 4.8 Pass@1 in the bundled benchmark, but uses the most estimated output credits among Opus entries.",
-	},
-	{model: "claude-sonnet-4.6", level: "high"}: {
-		passAt1:   "30%±4%",
-		aic:       "114.0",
-		aicFactor: "4.04",
-		tradeoff:  "Lower Pass@1 than Opus 4.8 high with similar estimated output-credit use.",
-	},
+	{model: "gpt-5.6-sol", level: "low"}:        {passAt1: "45%±2%", averageCost: "1.07", tradeoff: "Lowest-cost GPT 5.6 Sol setting, with lower Pass@1 than medium or high."},
+	{model: "gpt-5.6-sol", level: "medium"}:     {passAt1: "61%±2%", averageCost: "1.86", tradeoff: "Large quality gain over low for a modest cost increase."},
+	{model: "gpt-5.6-sol", level: "high"}:       {passAt1: "69%±1%", averageCost: "3.47", tradeoff: "Strong quality-cost balance, close to the model's maximum Pass@1."},
+	{model: "gpt-5.6-sol", level: "xhigh"}:      {passAt1: "71%±1%", averageCost: "4.70", tradeoff: "Near-maximum GPT quality at substantially less cost than max."},
+	{model: "gpt-5.6-sol", level: "max"}:        {passAt1: "73%±3%", averageCost: "8.39", tradeoff: "Highest Pass@1 in the bundled benchmark, at the highest GPT 5.6 Sol cost."},
+	{model: "claude-opus-4.8", level: "low"}:    {passAt1: "41%±1%", averageCost: "2.29", tradeoff: "Lowest-cost Opus setting, with lower Pass@1 than higher effort settings."},
+	{model: "claude-opus-4.8", level: "medium"}: {passAt1: "49%±2%", averageCost: "3.44", tradeoff: "Moderate cost with a meaningful quality gain over low."},
+	{model: "claude-opus-4.8", level: "high"}:   {passAt1: "52%±5%", averageCost: "4.28", tradeoff: "Best Opus quality-cost balance."},
+	{model: "claude-opus-4.8", level: "xhigh"}:  {passAt1: "54%±4%", averageCost: "8.01", tradeoff: "Slight quality gain over high at substantially higher cost."},
+	{model: "claude-opus-4.8", level: "max"}:    {passAt1: "59%±2%", averageCost: "13.22", tradeoff: "Highest Opus Pass@1 at the highest Opus cost."},
 }
 
 func benchmarkForRecommendation(rec Recommendation) (benchmarkEntry, bool) {
@@ -249,6 +162,8 @@ func benchmarkModelID(model string) (string, bool) {
 		return "gpt-5.4", true
 	case GPT55:
 		return "gpt-5.5", true
+	case GPT56Sol:
+		return "gpt-5.6-sol", true
 	case Opus48:
 		return "claude-opus-4.8", true
 	case Sonnet46:
