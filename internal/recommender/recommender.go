@@ -4,14 +4,14 @@ import "strings"
 
 const (
 	// Older models remain supported for compatibility, but bundled rules select
-	// the current benchmark leaders.
+	// from the current benchmark data.
 	GPT54      = "GPT 5.4"
 	GPT55      = "GPT 5.5"
 	GPT56Sol   = "GPT 5.6 Sol"
 	GPT56Luna  = "GPT 5.6 Luna"
 	GPT56Terra = "GPT 5.6 Terra"
 	Opus48     = "Opus 4.8"
-	Opus5      = "Opus 5"
+	Opus5      = "Claude Opus 5"
 	Fable5     = "Fable 5"
 	Sonnet46   = "Sonnet 4.6"
 	Sonnet5    = "Sonnet 5"
@@ -142,40 +142,52 @@ func (s Service) RecommendWithOptimizationAgainst(task string, optimization Opti
 	return s.defaultRecommendation
 }
 
+// defaultRecommendation answers a task that matched no rule. Unlike the rules it
+// ignores the optimization mode, staying deliberately conservative when the
+// request gives too little signal to optimize for anything in particular. Its
+// model and effort are the routine set's cost anchor.
 func defaultRecommendation() Recommendation {
-	return gptRecommendation(GPT56Sol, "medium", "Conservative default for an ambiguous task: strong value with enough reasoning for unclear work.")
+	selected := routineSet.selectFor(OptimizeCost)
+	return recommendationFor(selected.displayModel, selected.level, reasonAmbiguousDefault)
 }
 
 type modelInfo struct {
+	displayName string
 	benchmarkID string
 	provider    providerFamily
 }
 
+// bundledModels is the single registry mapping display names to the normalized
+// IDs used in the bundled benchmark data and in JSON output.
+var bundledModels = []modelInfo{
+	{displayName: GPT54, benchmarkID: "gpt-5.4", provider: providerGPT},
+	{displayName: GPT55, benchmarkID: "gpt-5.5", provider: providerGPT},
+	{displayName: GPT56Sol, benchmarkID: "gpt-5.6-sol", provider: providerGPT},
+	{displayName: GPT56Luna, benchmarkID: "gpt-5.6-luna", provider: providerGPT},
+	{displayName: GPT56Terra, benchmarkID: "gpt-5.6-terra", provider: providerGPT},
+	{displayName: Opus48, benchmarkID: "claude-opus-4.8", provider: providerAnthropic},
+	{displayName: Opus5, benchmarkID: "claude-opus-5", provider: providerAnthropic},
+	{displayName: Fable5, benchmarkID: "claude-fable-5", provider: providerAnthropic},
+	{displayName: Sonnet46, benchmarkID: "claude-sonnet-4.6", provider: providerAnthropic},
+	{displayName: Sonnet5, benchmarkID: "claude-sonnet-5", provider: providerAnthropic},
+}
+
 func modelInfoFor(model string) (modelInfo, bool) {
-	switch model {
-	case GPT54:
-		return modelInfo{benchmarkID: "gpt-5.4", provider: providerGPT}, true
-	case GPT55:
-		return modelInfo{benchmarkID: "gpt-5.5", provider: providerGPT}, true
-	case GPT56Sol:
-		return modelInfo{benchmarkID: "gpt-5.6-sol", provider: providerGPT}, true
-	case GPT56Luna:
-		return modelInfo{benchmarkID: "gpt-5.6-luna", provider: providerGPT}, true
-	case GPT56Terra:
-		return modelInfo{benchmarkID: "gpt-5.6-terra", provider: providerGPT}, true
-	case Opus48:
-		return modelInfo{benchmarkID: "claude-opus-4.8", provider: providerAnthropic}, true
-	case Opus5:
-		return modelInfo{benchmarkID: "claude-opus-5", provider: providerAnthropic}, true
-	case Fable5:
-		return modelInfo{benchmarkID: "claude-fable-5", provider: providerAnthropic}, true
-	case Sonnet46:
-		return modelInfo{benchmarkID: "claude-sonnet-4.6", provider: providerAnthropic}, true
-	case Sonnet5:
-		return modelInfo{benchmarkID: "claude-sonnet-5", provider: providerAnthropic}, true
-	default:
-		return modelInfo{}, false
+	for _, info := range bundledModels {
+		if info.displayName == model {
+			return info, true
+		}
 	}
+	return modelInfo{}, false
+}
+
+func displayModelForBenchmarkID(benchmarkID string) (string, bool) {
+	for _, info := range bundledModels {
+		if info.benchmarkID == benchmarkID {
+			return info.displayName, true
+		}
+	}
+	return "", false
 }
 
 func providerForModel(model string) providerFamily {

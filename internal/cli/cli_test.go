@@ -225,7 +225,7 @@ func TestRunAgainstUsesDefaultRecommenderForCodeReview(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("expected success exit code, got %d: %s", exitCode, stderr.String())
 	}
-	assertContainsAll(t, stdout.String(), "Model: Opus 4.8", "Reasoning: Anthropic Effort Level: high")
+	assertContainsAll(t, stdout.String(), "Model: Claude Opus 5", "Reasoning: Anthropic Effort Level: medium")
 }
 
 func TestRunWithNilWritersDiscardsOutput(t *testing.T) {
