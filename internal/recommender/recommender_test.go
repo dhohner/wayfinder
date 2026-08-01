@@ -240,10 +240,16 @@ func TestProviderTerminologyMatchesSelectedModelFamily(t *testing.T) {
 
 func TestProviderForModelClassifiesSupportedFamilies(t *testing.T) {
 	cases := map[string]providerFamily{
-		GPT54:    providerGPT,
-		GPT56Sol: providerGPT,
-		Opus48:   providerAnthropic,
-		Sonnet46: providerAnthropic,
+		GPT54:      providerGPT,
+		GPT55:      providerGPT,
+		GPT56Sol:   providerGPT,
+		GPT56Luna:  providerGPT,
+		GPT56Terra: providerGPT,
+		Opus48:     providerAnthropic,
+		Opus5:      providerAnthropic,
+		Fable5:     providerAnthropic,
+		Sonnet46:   providerAnthropic,
+		Sonnet5:    providerAnthropic,
 	}
 
 	for model, want := range cases {
@@ -655,22 +661,41 @@ func TestFormatJSONExplainIncludesTradeoff(t *testing.T) {
 	}
 }
 
+var benchmarkIDDisplayModels = map[string]string{
+	"gpt-5.4":           GPT54,
+	"gpt-5.5":           GPT55,
+	"gpt-5.6-sol":       GPT56Sol,
+	"gpt-5.6-luna":      GPT56Luna,
+	"gpt-5.6-terra":     GPT56Terra,
+	"claude-opus-4.8":   Opus48,
+	"claude-opus-5":     Opus5,
+	"claude-fable-5":    Fable5,
+	"claude-sonnet-4.6": Sonnet46,
+	"claude-sonnet-5":   Sonnet5,
+}
+
+func benchmarkRecommendation(t *testing.T, key benchmarkKey) Recommendation {
+	t.Helper()
+
+	model, ok := benchmarkIDDisplayModels[key.model]
+	if !ok {
+		t.Fatalf("test needs display model mapping for %q", key.model)
+	}
+	switch providerForModel(model) {
+	case providerGPT:
+		return gptRecommendation(model, key.level, "Benchmark-backed recommendation.")
+	case providerAnthropic:
+		return anthropicRecommendation(model, key.level, "Benchmark-backed recommendation.")
+	default:
+		t.Fatalf("bundled model %q has no provider family", model)
+		return Recommendation{}
+	}
+}
+
 func TestFormatJSONCoversEveryBundledExactBenchmark(t *testing.T) {
 	for key, entry := range bundledBenchmarks {
 		t.Run(key.model+"/"+key.level, func(t *testing.T) {
-			var rec Recommendation
-			switch key.model {
-			case "gpt-5.4":
-				rec = gptRecommendation(GPT54, key.level, "Benchmark-backed recommendation.")
-			case "gpt-5.6-sol":
-				rec = gptRecommendation(GPT56Sol, key.level, "Benchmark-backed recommendation.")
-			case "claude-opus-4.8":
-				rec = anthropicRecommendation(Opus48, key.level, "Benchmark-backed recommendation.")
-			case "claude-sonnet-4.6":
-				rec = anthropicRecommendation(Sonnet46, key.level, "Benchmark-backed recommendation.")
-			default:
-				t.Fatalf("test needs display model mapping for %q", key.model)
-			}
+			rec := benchmarkRecommendation(t, key)
 
 			out, err := FormatJSON(rec, OptimizeValue, true)
 			if err != nil {
@@ -836,5 +861,162 @@ func assertHumanOnlyOutput(t *testing.T, out string) {
 		if strings.Contains(lower, forbidden) {
 			t.Fatalf("output contains forbidden guardrail term %q: %q", forbidden, out)
 		}
+	}
+}
+
+func TestBundledBenchmarksTranscribeEveryPublishedRow(t *testing.T) {
+	const publishedRows = 41
+	if len(bundledBenchmarks) != publishedRows {
+		t.Fatalf("bundled benchmark table has %d entries, want %d published bench_v2.md rows", len(bundledBenchmarks), publishedRows)
+	}
+
+	cases := []struct {
+		key  benchmarkKey
+		want benchmarkEntry
+	}{
+		{benchmarkKey{"claude-opus-5", "max"}, benchmarkEntry{passAt1: "74%±4%", averageCost: "11.84", steps: 99, credits: 295.0}},
+		{benchmarkKey{"claude-opus-5", "medium"}, benchmarkEntry{passAt1: "69%±1%", averageCost: "3.29", steps: 52, credits: 92.5}},
+		{benchmarkKey{"claude-fable-5", "max"}, benchmarkEntry{passAt1: "70%±4%", averageCost: "21.63", steps: 88, credits: 595.0}},
+		{benchmarkKey{"claude-sonnet-5", "max"}, benchmarkEntry{passAt1: "54%±4%", averageCost: "26.40", steps: 268, credits: 214.0}},
+		{benchmarkKey{"claude-sonnet-4.6", "high"}, benchmarkEntry{passAt1: "30%±4%", averageCost: "5.52", steps: 134, credits: 114.0}},
+		{benchmarkKey{"claude-opus-4.8", "max"}, benchmarkEntry{passAt1: "59%±2%", averageCost: "13.22", steps: 120, credits: 337.5}},
+		{benchmarkKey{"gpt-5.6-sol", "high"}, benchmarkEntry{passAt1: "69%±1%", averageCost: "3.47", steps: 37, credits: 84.0}},
+		{benchmarkKey{"gpt-5.6-luna", "max"}, benchmarkEntry{passAt1: "67%±4%", averageCost: "3.03", steps: 102, credits: 43.8}},
+		{benchmarkKey{"gpt-5.6-luna", "low"}, benchmarkEntry{passAt1: "2%±1%", averageCost: "0.07", steps: 12, credits: 1.9}},
+		{benchmarkKey{"gpt-5.6-terra", "high"}, benchmarkEntry{passAt1: "54%±4%", averageCost: "1.13", steps: 34, credits: 33.0}},
+		{benchmarkKey{"gpt-5.5", "low"}, benchmarkEntry{passAt1: "27%±2%", averageCost: "1.20", steps: 28, credits: 28.2}},
+		{benchmarkKey{"gpt-5.4", "xhigh"}, benchmarkEntry{passAt1: "52%±2%", averageCost: "5.65", steps: 70, credits: 106.5}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.key.model+"/"+tc.key.level, func(t *testing.T) {
+			entry, ok := bundledBenchmarks[tc.key]
+			if !ok {
+				t.Fatalf("expected a bundled entry for %v", tc.key)
+			}
+			if entry.passAt1 != tc.want.passAt1 || entry.averageCost != tc.want.averageCost {
+				t.Fatalf("unexpected pass@1/cost for %v: got %q/%q want %q/%q", tc.key, entry.passAt1, entry.averageCost, tc.want.passAt1, tc.want.averageCost)
+			}
+			if entry.steps != tc.want.steps || entry.credits != tc.want.credits {
+				t.Fatalf("unexpected steps/credits for %v: got %d/%v want %d/%v", tc.key, entry.steps, entry.credits, tc.want.steps, tc.want.credits)
+			}
+			if entry.tradeoff == "" {
+				t.Fatalf("expected tradeoff prose for %v", tc.key)
+			}
+		})
+	}
+}
+
+func TestBundledBenchmarkCreditsKeepPublishedPrecision(t *testing.T) {
+	// bench_v2.md publishes eleven credit estimates with a non-zero decimal;
+	// rounding any of them to whole credits is a defect.
+	fractional := map[benchmarkKey]float64{
+		{"claude-opus-5", "medium"}:   92.5,
+		{"claude-opus-4.8", "low"}:    72.5,
+		{"claude-opus-4.8", "medium"}: 102.5,
+		{"claude-opus-4.8", "max"}:    337.5,
+		{"gpt-5.6-luna", "low"}:       1.9,
+		{"gpt-5.6-luna", "medium"}:    4.9,
+		{"gpt-5.6-luna", "high"}:      15.6,
+		{"gpt-5.6-luna", "max"}:       43.8,
+		{"gpt-5.6-terra", "low"}:      12.9,
+		{"gpt-5.5", "low"}:            28.2,
+		{"gpt-5.4", "xhigh"}:          106.5,
+	}
+
+	for key, want := range fractional {
+		entry, ok := bundledBenchmarks[key]
+		if !ok {
+			t.Fatalf("expected a bundled entry for %v", key)
+		}
+		if entry.credits != want {
+			t.Fatalf("credits for %v = %v, want %v", key, entry.credits, want)
+		}
+	}
+}
+
+func TestEveryBundledBenchmarkModelHasProviderFamily(t *testing.T) {
+	for key := range bundledBenchmarks {
+		model, ok := benchmarkIDDisplayModels[key.model]
+		if !ok {
+			t.Fatalf("bundled model %q has no display model name", key.model)
+		}
+		if got, want := benchmarkModelIDOf(t, model), key.model; got != want {
+			t.Fatalf("benchmarkModelID(%q) = %q, want %q", model, got, want)
+		}
+		if providerForModel(model) == providerUnknown {
+			t.Fatalf("bundled model %q (%q) has no provider family", key.model, model)
+		}
+	}
+}
+
+func benchmarkModelIDOf(t *testing.T, model string) string {
+	t.Helper()
+
+	id, ok := benchmarkModelID(model)
+	if !ok {
+		t.Fatalf("benchmarkModelID(%q) reported no normalized ID", model)
+	}
+	return id
+}
+
+func TestFormatJSONRendersClaudeOpus5AtMaxEffort(t *testing.T) {
+	rec := anthropicRecommendation(Opus5, "max", "Benchmark-backed recommendation.")
+
+	out, err := FormatJSON(rec, OptimizeQuality, false)
+	if err != nil {
+		t.Fatalf("expected JSON format to succeed: %v", err)
+	}
+
+	var doc struct {
+		Model     string `json:"model"`
+		Reasoning string `json:"reasoning"`
+		Benchmark struct {
+			PassAt1 float64 `json:"pass_at_1"`
+		} `json:"benchmark"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("expected valid JSON, got %q: %v", out, err)
+	}
+	if doc.Model != "claude-opus-5" || doc.Reasoning != "max" {
+		t.Fatalf("unexpected normalized fields: %+v", doc)
+	}
+	if doc.Benchmark.PassAt1 != 0.74 {
+		t.Fatalf("expected pass_at_1 0.74, got %v", doc.Benchmark.PassAt1)
+	}
+	if providerForModel(Opus5) != providerAnthropic {
+		t.Fatalf("expected %q in the Anthropic provider family", Opus5)
+	}
+}
+
+func TestBundledBenchmarksOmitUnpublishedPairs(t *testing.T) {
+	// bench_v2.md publishes only claude-sonnet-4.6[high] and gpt-5.4[xhigh].
+	unpublished := []benchmarkKey{
+		{"claude-sonnet-4.6", "low"},
+		{"claude-sonnet-4.6", "max"},
+		{"gpt-5.4", "high"},
+		{"gpt-5.5", "max"},
+	}
+
+	for _, key := range unpublished {
+		if _, ok := bundledBenchmarks[key]; ok {
+			t.Fatalf("did not expect a bundled entry for unpublished pair %v", key)
+		}
+	}
+
+	if _, ok := benchmarkForRecommendation(anthropicRecommendation(Sonnet46, "low", "Unpublished pair.")); ok {
+		t.Fatalf("expected lookup to report no exact benchmark match for claude-sonnet-4.6[low]")
+	}
+}
+
+func TestBundledTradeoffProseSurvivesTheOpus5Leaderboard(t *testing.T) {
+	solMax := bundledBenchmarks[benchmarkKey{"gpt-5.6-sol", "max"}]
+	if strings.Contains(strings.ToLower(solMax.tradeoff), "highest pass@1 in the bundled benchmark") {
+		t.Fatalf("gpt-5.6-sol[max] must not claim the highest bundled Pass@1: %q", solMax.tradeoff)
+	}
+
+	opus5Max := bundledBenchmarks[benchmarkKey{"claude-opus-5", "max"}]
+	if !strings.Contains(strings.ToLower(opus5Max.tradeoff), "highest pass@1 in the bundled benchmark") {
+		t.Fatalf("claude-opus-5[max] holds the highest bundled Pass@1: %q", opus5Max.tradeoff)
 	}
 }
