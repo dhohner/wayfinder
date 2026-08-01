@@ -12,6 +12,10 @@ func Format(rec Recommendation) string {
 	return fmt.Sprintf("Model: %s\nReasoning: %s\nReason: %s", rec.Model, rec.ReasoningSetting, rec.Reason)
 }
 
+// creditsQualification is required on human-readable credit estimates because
+// input-related token costs are excluded.
+const creditsQualification = "output tokens only, lower bound"
+
 // FormatWithExplanation renders the default output plus exact bundled benchmark evidence.
 func FormatWithExplanation(rec Recommendation) string {
 	out := Format(rec)
@@ -19,7 +23,10 @@ func FormatWithExplanation(rec Recommendation) string {
 	if !ok {
 		return out
 	}
-	return fmt.Sprintf("%s\nBenchmark: Pass@1 %s; average cost %s.\nTradeoff: %s", out, entry.passAt1, entry.averageCost, entry.tradeoff)
+	return fmt.Sprintf(
+		"%s\nBenchmark: Pass@1 %s; average cost %s.\nEstimated Copilot AI credits: %.1f (%s).\nTradeoff: %s",
+		out, entry.passAt1, entry.averageCost, entry.credits, creditsQualification, entry.tradeoff,
+	)
 }
 
 // FormatJSON renders a stable machine-readable recommendation document.
@@ -70,9 +77,10 @@ type jsonRecommendation struct {
 }
 
 type jsonBenchmark struct {
-	PassAt1     float64 `json:"pass_at_1"`
-	AverageCost float64 `json:"average_cost"`
-	Tradeoff    string  `json:"tradeoff,omitempty"`
+	PassAt1         float64 `json:"pass_at_1"`
+	AverageCost     float64 `json:"average_cost"`
+	CreditsEstimate float64 `json:"credits_estimate"`
+	Tradeoff        string  `json:"tradeoff,omitempty"`
 }
 
 func (entry benchmarkEntry) jsonBenchmark(explain bool) (*jsonBenchmark, error) {
@@ -84,7 +92,7 @@ func (entry benchmarkEntry) jsonBenchmark(explain bool) (*jsonBenchmark, error) 
 	if err != nil {
 		return nil, err
 	}
-	benchmark := &jsonBenchmark{PassAt1: passAt1, AverageCost: averageCost}
+	benchmark := &jsonBenchmark{PassAt1: passAt1, AverageCost: averageCost, CreditsEstimate: entry.credits}
 	if explain {
 		benchmark.Tradeoff = entry.tradeoff
 	}

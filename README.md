@@ -58,7 +58,9 @@ go run ./cmd/wayfinder --json --optimize quality "implement a small Go API endpo
 ```
 
 JSON output uses normalized model and reasoning IDs.
-Exact bundled benchmark matches include numeric `pass_at_1` and `average_cost` fields under `benchmark`.
+Exact bundled benchmark matches include numeric `pass_at_1`, `average_cost`, and `credits_estimate` fields under `benchmark`.
+`credits_estimate` is the estimated GitHub Copilot AI credit cost of the benchmark run's output tokens only, so it is a lower bound rather than a price.
+`--explain` reports the same figure in text output alongside the benchmark evidence.
 
 ## Primary recommendations
 

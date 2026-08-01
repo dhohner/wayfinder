@@ -2,6 +2,7 @@ package recommender
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -756,6 +757,133 @@ func TestFormatJSONOmitsBenchmarkForMissingExactMatch(t *testing.T) {
 			t.Fatalf("did not expect benchmark for missing exact match: %v", doc)
 		}
 	}
+}
+
+func TestEstimatedCreditsAppearInExplanationAndJSONOnlyForExactMatch(t *testing.T) {
+	exact := gptRecommendation(GPT56Sol, "high", "Balanced value choice.")
+
+	text := FormatWithExplanation(exact)
+	assertContainsAll(t, text,
+		"Benchmark: Pass@1 69%±1%; average cost 3.47.",
+		"Estimated Copilot AI credits: 84.0 (output tokens only, lower bound).",
+		"Tradeoff:",
+	)
+
+	document, err := FormatJSON(exact, OptimizeValue, false)
+	if err != nil {
+		t.Fatalf("expected JSON format to succeed: %v", err)
+	}
+	benchmark := benchmarkObject(t, document)
+	if benchmark["credits_estimate"] != 84.0 {
+		t.Fatalf("expected numeric credits_estimate 84.0, got %v in %v", benchmark["credits_estimate"], benchmark)
+	}
+	if benchmark["pass_at_1"] != 0.69 || benchmark["average_cost"] != 3.47 {
+		t.Fatalf("credits_estimate must be additive, leaving existing fields intact: %v", benchmark)
+	}
+	if _, ok := benchmark["tradeoff"]; ok {
+		t.Fatalf("did not expect tradeoff without explain: %v", benchmark)
+	}
+
+	missing := gptRecommendation(GPT54, "high", "Unsupported level.")
+
+	missingText := FormatWithExplanation(missing)
+	assertHumanOnlyOutput(t, missingText)
+	assertNotContainsAny(t, missingText, "Estimated Copilot AI credits", "106.5")
+
+	missingDocument, err := FormatJSON(missing, OptimizeValue, true)
+	if err != nil {
+		t.Fatalf("expected JSON format to succeed: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(missingDocument), &doc); err != nil {
+		t.Fatalf("expected valid JSON, got %q: %v", missingDocument, err)
+	}
+	if _, ok := doc["benchmark"]; ok {
+		t.Fatalf("did not expect benchmark for missing exact match: %v", doc)
+	}
+	assertNotContainsAny(t, missingDocument, "credits_estimate", "106.5")
+}
+
+// TestCreditEstimateKeepsPublishedPrecision pins the two fractional rows named in the
+// acceptance criteria against literal expected text, so a change that rounded credits
+// to whole numbers cannot pass by rounding both sides of the comparison.
+func TestCreditEstimateKeepsPublishedPrecision(t *testing.T) {
+	cases := []struct {
+		rec  Recommendation
+		want float64
+		text string
+	}{
+		{gptRecommendation(GPT56Luna, "max", "Cheapest viable setting."), 43.8, "Estimated Copilot AI credits: 43.8 ("},
+		{anthropicRecommendation(Opus5, "medium", "Strong quality per credit."), 92.5, "Estimated Copilot AI credits: 92.5 ("},
+	}
+
+	for _, tc := range cases {
+		assertContainsAll(t, FormatWithExplanation(tc.rec), tc.text)
+
+		document, err := FormatJSON(tc.rec, OptimizeCost, true)
+		if err != nil {
+			t.Fatalf("expected JSON format to succeed: %v", err)
+		}
+		if got := benchmarkObject(t, document)["credits_estimate"]; got != tc.want {
+			t.Fatalf("credits_estimate = %v, want %v in %q", got, tc.want, document)
+		}
+	}
+}
+
+func TestEveryBundledBenchmarkReportsItsCreditEstimateAsAnEstimate(t *testing.T) {
+	for key, entry := range bundledBenchmarks {
+		t.Run(key.model+"/"+key.level, func(t *testing.T) {
+			rec := benchmarkRecommendation(t, key)
+			published := strconv.FormatFloat(entry.credits, 'f', 1, 64)
+
+			text := FormatWithExplanation(rec)
+			assertContainsAll(t, text, "Estimated Copilot AI credits: "+published+" (output tokens only, lower bound).", "average cost "+entry.averageCost)
+			assertNotContainsAny(t, text, "$")
+
+			document, err := FormatJSON(rec, OptimizeValue, false)
+			if err != nil {
+				t.Fatalf("expected JSON format to succeed: %v", err)
+			}
+			if got := benchmarkObject(t, document)["credits_estimate"]; got != entry.credits {
+				t.Fatalf("credits_estimate = %v, want %v in %q", got, entry.credits, document)
+			}
+		})
+	}
+}
+
+func TestBuiltInExplanationsNeverPresentCreditsAsAPrice(t *testing.T) {
+	tasks := []string{
+		"implement a Go API endpoint",
+		"fix a typo in a README",
+		"debug an intermittent distributed race condition in production",
+		"create a UI design wireframe for onboarding",
+		"help me with this task",
+	}
+
+	for _, task := range tasks {
+		for _, optimization := range allOptimizations {
+			out := FormatWithExplanation(RecommendWithOptimization(task, optimization))
+
+			assertNotContainsAny(t, out, "$")
+			if strings.Contains(out, "Estimated Copilot AI credits:") && !strings.Contains(out, "(output tokens only, lower bound).") {
+				t.Fatalf("credit figure for %q with %q lacks its estimate qualification:\n%s", task, optimization, out)
+			}
+		}
+	}
+}
+
+func benchmarkObject(t *testing.T, document string) map[string]any {
+	t.Helper()
+
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(document), &doc); err != nil {
+		t.Fatalf("expected valid JSON, got %q: %v", document, err)
+	}
+	benchmark, ok := doc["benchmark"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected benchmark object in %q", document)
+	}
+	return benchmark
 }
 
 func TestFormatJSONRejectsUnnormalizableRecommendations(t *testing.T) {
