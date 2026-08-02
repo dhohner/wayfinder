@@ -34,7 +34,7 @@ The default is `value`.
 go run ./cmd/wayfinder --optimize cost "implement a small Go API endpoint"
 ```
 
-On substantive coding work, quality selects Claude Opus 5 at max effort, value and speed select GPT 5.6 Sol at high reasoning, and cost selects GPT 5.6 Luna at max reasoning for roughly one seventh of the credits quality costs.
+On substantive coding work, quality selects Claude Opus 5 at max effort, value and speed select GPT 5.6 Sol at high reasoning, and cost selects GPT 5.6 Luna at max reasoning for about one twenty-fifth of the credits quality costs.
 Visual, UI, and UX work uses Claude Opus 5 at medium effort by default and max effort for quality.
 
 ## Adversarial code review
@@ -59,7 +59,8 @@ go run ./cmd/wayfinder --json --optimize quality "implement a small Go API endpo
 
 JSON output uses normalized model and reasoning IDs.
 Exact bundled benchmark matches include numeric `pass_at_1`, `average_cost`, and `credits_estimate` fields under `benchmark`.
-`credits_estimate` is the estimated GitHub Copilot AI credit cost of the benchmark run's output tokens only, so it is a lower bound rather than a price.
+`credits_estimate` is the estimated GitHub Copilot AI credit cost of the whole benchmark run, counting output tokens at the GA output rate and input tokens at a blended rate that assumes a 95% cache-hit ratio.
+Because that ratio is modelled rather than measured, treat it as an estimate accurate to roughly a quarter, not a price.
 `--explain` reports the same figure in text output alongside the benchmark evidence.
 
 ## Primary recommendations

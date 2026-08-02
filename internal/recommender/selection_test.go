@@ -261,7 +261,7 @@ func TestSpeedBandAdmitsTheExactBoundaryCandidate(t *testing.T) {
 }
 
 func TestPassAt1FloorsAndCeilingsAreInclusive(t *testing.T) {
-	// gpt-5.6-terra[xhigh] sits at exactly 60% pass@1 and exactly 60 credits.
+	// gpt-5.6-terra[xhigh] sits at exactly 60% pass@1 and exactly 141.7 credits.
 	// gpt-5.6-sol[high] sits at exactly 37 steps. claude-sonnet-5[xhigh] sits at
 	// exactly 50% pass@1.
 	cases := []struct {
@@ -273,8 +273,8 @@ func TestPassAt1FloorsAndCeilingsAreInclusive(t *testing.T) {
 	}{
 		{"floor 60 admits exactly 60", routineSet, GPT56Terra, "xhigh", true},
 		{"floor 50 admits exactly 50", candidateSet{name: "floor50", passAt1Floor: 50, creditCap: noCreditCap, stepCap: noStepCap}, Sonnet5, "xhigh", true},
-		{"credit cap admits exactly the cap", candidateSet{name: "credits60", passAt1Floor: 50, creditCap: 60, stepCap: noStepCap}, GPT56Terra, "xhigh", true},
-		{"credit cap excludes just above the cap", candidateSet{name: "credits59", passAt1Floor: 50, creditCap: 59.9, stepCap: noStepCap}, GPT56Terra, "xhigh", false},
+		{"credit cap admits exactly the cap", candidateSet{name: "credits141.7", passAt1Floor: 50, creditCap: 141.7, stepCap: noStepCap}, GPT56Terra, "xhigh", true},
+		{"credit cap excludes just above the cap", candidateSet{name: "credits141.6", passAt1Floor: 50, creditCap: 141.6, stepCap: noStepCap}, GPT56Terra, "xhigh", false},
 		{"step cap admits exactly the cap", candidateSet{name: "steps37", passAt1Floor: 50, creditCap: noCreditCap, stepCap: 37}, GPT56Sol, "high", true},
 		{"step cap excludes just above the cap", candidateSet{name: "steps36", passAt1Floor: 50, creditCap: noCreditCap, stepCap: 36}, GPT56Sol, "high", false},
 	}
@@ -290,7 +290,8 @@ func TestPassAt1FloorsAndCeilingsAreInclusive(t *testing.T) {
 
 // TestQualityBreaksPassAt1TiesByLowerCredits covers the real tie in the routine
 // set: gpt-5.6-sol[high] and claude-opus-5[medium] both score 69%, and quality
-// must take the cheaper one.
+// must take the cheaper one. The guard that the tie is the top of the set is
+// what makes this a tie-break case rather than an ordinary best-score pick.
 func TestQualityBreaksPassAt1TiesByLowerCredits(t *testing.T) {
 	candidates := routineSet.candidates()
 	sol, okSol := findRow(candidates, GPT56Sol, "high")
@@ -303,6 +304,11 @@ func TestQualityBreaksPassAt1TiesByLowerCredits(t *testing.T) {
 	}
 	if !(sol.credits < opus.credits) {
 		t.Fatalf("expected %s[high] to be the cheaper candidate, got %v and %v", GPT56Sol, sol.credits, opus.credits)
+	}
+	for _, row := range candidates {
+		if row.passAt1 > sol.passAt1 {
+			t.Fatalf("the tie must be the top of the routine set, found %s[%s] at %d%%", row.displayModel, row.level, row.passAt1)
+		}
 	}
 
 	selected := routineSet.selectFor(OptimizeQuality)

@@ -163,7 +163,7 @@ func TestRunReportsEstimatedCreditsInExplanationAndJSON(t *testing.T) {
 	if exitCode := Run([]string{"--explain", "implement", "an", "API"}, &explainOut, &explainErr, &stubRecommender{}); exitCode != 0 {
 		t.Fatalf("expected success exit code, got %d: %s", exitCode, explainErr.String())
 	}
-	assertContainsAll(t, explainOut.String(), "average cost 1.86", "Estimated Copilot AI credits: 54.0 (output tokens only, lower bound).", "Tradeoff:")
+	assertContainsAll(t, explainOut.String(), "average cost 1.86", "Estimated Copilot AI credits: 164.4 (input and output tokens, estimate).", "Tradeoff:")
 	assertNotContainsAny(t, explainOut.String(), "$")
 
 	var jsonOut, jsonErr bytes.Buffer
@@ -177,8 +177,8 @@ func TestRunReportsEstimatedCreditsInExplanationAndJSON(t *testing.T) {
 	if err := json.Unmarshal(jsonOut.Bytes(), &doc); err != nil {
 		t.Fatalf("expected valid JSON, got %q: %v", jsonOut.String(), err)
 	}
-	if doc.Benchmark["credits_estimate"] != 54.0 {
-		t.Fatalf("expected credits_estimate 54.0 without --explain, got %v in %v", doc.Benchmark["credits_estimate"], doc.Benchmark)
+	if doc.Benchmark["credits_estimate"] != 164.4 {
+		t.Fatalf("expected credits_estimate 164.4 without --explain, got %v in %v", doc.Benchmark["credits_estimate"], doc.Benchmark)
 	}
 	if _, ok := doc.Benchmark["tradeoff"]; ok {
 		t.Fatalf("did not expect tradeoff without --explain: %v", doc.Benchmark)

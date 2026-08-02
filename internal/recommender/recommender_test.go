@@ -59,11 +59,11 @@ func TestRecommendNuancedRoutineTaskUsesGPT56SolHighReasoning(t *testing.T) {
 func TestRecommendAmbiguousTaskUsesConservativeOfflineDefault(t *testing.T) {
 	rec := Recommend("help me with this task")
 
-	if rec.Model != GPT56Sol {
-		t.Fatalf("expected conservative default %s, got %s", GPT56Sol, rec.Model)
+	if rec.Model != GPT56Terra {
+		t.Fatalf("expected conservative default %s, got %s", GPT56Terra, rec.Model)
 	}
-	if rec.ReasoningSetting != "GPT reasoning level: medium" {
-		t.Fatalf("expected GPT medium reasoning, got %q", rec.ReasoningSetting)
+	if rec.ReasoningSetting != "GPT reasoning level: xhigh" {
+		t.Fatalf("expected GPT xhigh reasoning, got %q", rec.ReasoningSetting)
 	}
 }
 
@@ -72,7 +72,7 @@ func TestZeroValueServiceUsesBundledDefaults(t *testing.T) {
 
 	rec := svc.Recommend("help me with this task")
 
-	if rec.Model != GPT56Sol || rec.ReasoningSetting != "GPT reasoning level: medium" {
+	if rec.Model != GPT56Terra || rec.ReasoningSetting != "GPT reasoning level: xhigh" {
 		t.Fatalf("expected zero-value service to use bundled defaults, got %+v", rec)
 	}
 }
@@ -279,19 +279,23 @@ func TestOptimizeQualityRaisesRoutineCodingToHigh(t *testing.T) {
 	}
 }
 
-func TestOptimizeCostKeepsDefaultModelForModerateTask(t *testing.T) {
+// TestOptimizeCostPicksTheCheapestRoutineCandidate pins cost mode to the routine
+// set's credit anchor. gpt-5.6-terra[xhigh] took this from gpt-5.6-sol[medium]
+// in the 2026-08-02 price refresh: 48 credits against 54, one point of pass@1
+// lower and still inside the routine ceilings.
+func TestOptimizeCostPicksTheCheapestRoutineCandidate(t *testing.T) {
 	rec := RecommendWithOptimization("implement a Go API endpoint", OptimizeCost)
 
-	if rec.Model != GPT56Sol {
-		t.Fatalf("expected default model %s, got %s", GPT56Sol, rec.Model)
+	if rec.Model != GPT56Terra || rec.ReasoningSetting != "GPT reasoning level: xhigh" {
+		t.Fatalf("expected xhigh-reasoning %s, got %+v", GPT56Terra, rec)
 	}
 }
 
 func TestOptimizeSpeedKeepsConservativeReasoningForAmbiguousTask(t *testing.T) {
 	rec := RecommendWithOptimization("help me with this task", OptimizeSpeed)
 
-	if rec.Model != GPT56Sol || rec.ReasoningSetting != "GPT reasoning level: medium" {
-		t.Fatalf("expected medium-reasoning GPT 5.6 Sol, got %+v", rec)
+	if rec.Model != GPT56Terra || rec.ReasoningSetting != "GPT reasoning level: xhigh" {
+		t.Fatalf("expected xhigh-reasoning %s, got %+v", GPT56Terra, rec)
 	}
 }
 
@@ -425,7 +429,7 @@ func TestCodingBenchmarkOptimizationMatrix(t *testing.T) {
 	}{
 		{"routine default", "implement a Go API endpoint", OptimizeValue, GPT56Sol, "GPT reasoning level: high"},
 		{"routine value", "implement a Go API endpoint", OptimizeValue, GPT56Sol, "GPT reasoning level: high"},
-		{"routine cost", "implement a Go API endpoint", OptimizeCost, GPT56Sol, "GPT reasoning level: medium"},
+		{"routine cost", "implement a Go API endpoint", OptimizeCost, GPT56Terra, "GPT reasoning level: xhigh"},
 		{"routine speed", "implement a Go API endpoint", OptimizeSpeed, GPT56Sol, "GPT reasoning level: medium"},
 		{"routine quality", "implement a Go API endpoint", OptimizeQuality, GPT56Sol, "GPT reasoning level: high"},
 		{"simple value", "rename a variable in a small Go function", OptimizeValue, Opus5, "Anthropic Effort Level: low"},
@@ -765,7 +769,7 @@ func TestEstimatedCreditsAppearInExplanationAndJSONOnlyForExactMatch(t *testing.
 	text := FormatWithExplanation(exact)
 	assertContainsAll(t, text,
 		"Benchmark: Pass@1 69%±1%; average cost 3.47.",
-		"Estimated Copilot AI credits: 84.0 (output tokens only, lower bound).",
+		"Estimated Copilot AI credits: 282.1 (input and output tokens, estimate).",
 		"Tradeoff:",
 	)
 
@@ -774,8 +778,8 @@ func TestEstimatedCreditsAppearInExplanationAndJSONOnlyForExactMatch(t *testing.
 		t.Fatalf("expected JSON format to succeed: %v", err)
 	}
 	benchmark := benchmarkObject(t, document)
-	if benchmark["credits_estimate"] != 84.0 {
-		t.Fatalf("expected numeric credits_estimate 84.0, got %v in %v", benchmark["credits_estimate"], benchmark)
+	if benchmark["credits_estimate"] != 282.1 {
+		t.Fatalf("expected numeric credits_estimate 282.1, got %v in %v", benchmark["credits_estimate"], benchmark)
 	}
 	if benchmark["pass_at_1"] != 0.69 || benchmark["average_cost"] != 3.47 {
 		t.Fatalf("credits_estimate must be additive, leaving existing fields intact: %v", benchmark)
@@ -801,20 +805,20 @@ func TestEstimatedCreditsAppearInExplanationAndJSONOnlyForExactMatch(t *testing.
 	if _, ok := doc["benchmark"]; ok {
 		t.Fatalf("did not expect benchmark for missing exact match: %v", doc)
 	}
-	assertNotContainsAny(t, missingDocument, "credits_estimate", "106.5")
+	assertNotContainsAny(t, missingDocument, "credits_estimate", "448.5")
 }
 
-// TestCreditEstimateKeepsPublishedPrecision pins the two fractional rows named in the
-// acceptance criteria against literal expected text, so a change that rounded credits
-// to whole numbers cannot pass by rounding both sides of the comparison.
+// TestCreditEstimateKeepsPublishedPrecision pins two fractional rows against literal
+// expected text, so a change that rounded credits to whole numbers cannot pass by
+// rounding both sides of the comparison.
 func TestCreditEstimateKeepsPublishedPrecision(t *testing.T) {
 	cases := []struct {
 		rec  Recommendation
 		want float64
 		text string
 	}{
-		{gptRecommendation(GPT56Luna, "max", "Cheapest viable setting."), 43.8, "Estimated Copilot AI credits: 43.8 ("},
-		{anthropicRecommendation(Opus5, "medium", "Strong quality per credit."), 92.5, "Estimated Copilot AI credits: 92.5 ("},
+		{gptRecommendation(GPT56Luna, "max", "Cheapest viable setting."), 53.6, "Estimated Copilot AI credits: 53.6 ("},
+		{anthropicRecommendation(Opus5, "medium", "Strong quality per credit."), 352.0, "Estimated Copilot AI credits: 352.0 ("},
 	}
 
 	for _, tc := range cases {
@@ -837,7 +841,7 @@ func TestEveryBundledBenchmarkReportsItsCreditEstimateAsAnEstimate(t *testing.T)
 			published := strconv.FormatFloat(entry.credits, 'f', 1, 64)
 
 			text := FormatWithExplanation(rec)
-			assertContainsAll(t, text, "Estimated Copilot AI credits: "+published+" (output tokens only, lower bound).", "average cost "+entry.averageCost)
+			assertContainsAll(t, text, "Estimated Copilot AI credits: "+published+" (input and output tokens, estimate).", "average cost "+entry.averageCost)
 			assertNotContainsAny(t, text, "$")
 
 			document, err := FormatJSON(rec, OptimizeValue, false)
@@ -865,7 +869,7 @@ func TestBuiltInExplanationsNeverPresentCreditsAsAPrice(t *testing.T) {
 			out := FormatWithExplanation(RecommendWithOptimization(task, optimization))
 
 			assertNotContainsAny(t, out, "$")
-			if strings.Contains(out, "Estimated Copilot AI credits:") && !strings.Contains(out, "(output tokens only, lower bound).") {
+			if strings.Contains(out, "Estimated Copilot AI credits:") && !strings.Contains(out, "(input and output tokens, estimate).") {
 				t.Fatalf("credit figure for %q with %q lacks its estimate qualification:\n%s", task, optimization, out)
 			}
 		}
@@ -1027,18 +1031,18 @@ func TestBundledBenchmarksTranscribeEveryPublishedRow(t *testing.T) {
 		key  benchmarkKey
 		want benchmarkEntry
 	}{
-		{benchmarkKey{"claude-opus-5", "max"}, benchmarkEntry{passAt1: "74%±4%", averageCost: "11.84", steps: 99, credits: 295.0}},
-		{benchmarkKey{"claude-opus-5", "medium"}, benchmarkEntry{passAt1: "69%±1%", averageCost: "3.29", steps: 52, credits: 92.5}},
-		{benchmarkKey{"claude-fable-5", "max"}, benchmarkEntry{passAt1: "70%±4%", averageCost: "21.63", steps: 88, credits: 595.0}},
-		{benchmarkKey{"claude-sonnet-5", "max"}, benchmarkEntry{passAt1: "54%±4%", averageCost: "26.40", steps: 268, credits: 214.0}},
-		{benchmarkKey{"claude-sonnet-4.6", "high"}, benchmarkEntry{passAt1: "30%±4%", averageCost: "5.52", steps: 134, credits: 114.0}},
-		{benchmarkKey{"claude-opus-4.8", "max"}, benchmarkEntry{passAt1: "59%±2%", averageCost: "13.22", steps: 120, credits: 337.5}},
-		{benchmarkKey{"gpt-5.6-sol", "high"}, benchmarkEntry{passAt1: "69%±1%", averageCost: "3.47", steps: 37, credits: 84.0}},
-		{benchmarkKey{"gpt-5.6-luna", "max"}, benchmarkEntry{passAt1: "67%±4%", averageCost: "3.03", steps: 102, credits: 43.8}},
-		{benchmarkKey{"gpt-5.6-luna", "low"}, benchmarkEntry{passAt1: "2%±1%", averageCost: "0.07", steps: 12, credits: 1.9}},
-		{benchmarkKey{"gpt-5.6-terra", "high"}, benchmarkEntry{passAt1: "54%±4%", averageCost: "1.13", steps: 34, credits: 33.0}},
-		{benchmarkKey{"gpt-5.5", "low"}, benchmarkEntry{passAt1: "27%±2%", averageCost: "1.20", steps: 28, credits: 28.2}},
-		{benchmarkKey{"gpt-5.4", "xhigh"}, benchmarkEntry{passAt1: "52%±2%", averageCost: "5.65", steps: 70, credits: 106.5}},
+		{benchmarkKey{"claude-opus-5", "max"}, benchmarkEntry{passAt1: "74%±4%", averageCost: "11.84", steps: 99, credits: 1383.3}},
+		{benchmarkKey{"claude-opus-5", "medium"}, benchmarkEntry{passAt1: "69%±1%", averageCost: "3.29", steps: 52, credits: 352.0}},
+		{benchmarkKey{"claude-fable-5", "max"}, benchmarkEntry{passAt1: "70%±4%", averageCost: "21.63", steps: 88, credits: 2425.6}},
+		{benchmarkKey{"claude-sonnet-5", "max"}, benchmarkEntry{passAt1: "54%±4%", averageCost: "26.40", steps: 268, credits: 2314.2}},
+		{benchmarkKey{"claude-sonnet-4.6", "high"}, benchmarkEntry{passAt1: "30%±4%", averageCost: "5.52", steps: 134, credits: 674.1}},
+		{benchmarkKey{"claude-opus-4.8", "max"}, benchmarkEntry{passAt1: "59%±2%", averageCost: "13.22", steps: 120, credits: 1573.6}},
+		{benchmarkKey{"gpt-5.6-sol", "high"}, benchmarkEntry{passAt1: "69%±1%", averageCost: "3.47", steps: 37, credits: 282.1}},
+		{benchmarkKey{"gpt-5.6-luna", "max"}, benchmarkEntry{passAt1: "67%±4%", averageCost: "3.03", steps: 102, credits: 53.6}},
+		{benchmarkKey{"gpt-5.6-luna", "low"}, benchmarkEntry{passAt1: "2%±1%", averageCost: "0.07", steps: 12, credits: 0.8}},
+		{benchmarkKey{"gpt-5.6-terra", "high"}, benchmarkEntry{passAt1: "54%±4%", averageCost: "1.13", steps: 34, credits: 71.0}},
+		{benchmarkKey{"gpt-5.5", "low"}, benchmarkEntry{passAt1: "27%±2%", averageCost: "1.20", steps: 28, credits: 84.6}},
+		{benchmarkKey{"gpt-5.4", "xhigh"}, benchmarkEntry{passAt1: "52%±2%", averageCost: "5.65", steps: 70, credits: 448.5}},
 	}
 
 	for _, tc := range cases {
@@ -1061,20 +1065,44 @@ func TestBundledBenchmarksTranscribeEveryPublishedRow(t *testing.T) {
 }
 
 func TestBundledBenchmarkCreditsKeepPublishedPrecision(t *testing.T) {
-	// bench_v2.md publishes eleven credit estimates with a non-zero decimal;
+	// bench_v2.md publishes 35 credit estimates with a non-zero decimal;
 	// rounding any of them to whole credits is a defect.
 	fractional := map[benchmarkKey]float64{
-		{"claude-opus-5", "medium"}:   92.5,
-		{"claude-opus-4.8", "low"}:    72.5,
-		{"claude-opus-4.8", "medium"}: 102.5,
-		{"claude-opus-4.8", "max"}:    337.5,
-		{"gpt-5.6-luna", "low"}:       1.9,
-		{"gpt-5.6-luna", "medium"}:    4.9,
-		{"gpt-5.6-luna", "high"}:      15.6,
-		{"gpt-5.6-luna", "max"}:       43.8,
-		{"gpt-5.6-terra", "low"}:      12.9,
-		{"gpt-5.5", "low"}:            28.2,
-		{"gpt-5.4", "xhigh"}:          106.5,
+		{"claude-fable-5", "max"}:     2425.6,
+		{"claude-sonnet-5", "max"}:    2314.2,
+		{"claude-opus-4.8", "max"}:    1573.6,
+		{"claude-fable-5", "xhigh"}:   1464.5,
+		{"claude-opus-5", "max"}:      1383.3,
+		{"claude-opus-5", "xhigh"}:    1047.9,
+		{"claude-sonnet-5", "xhigh"}:  1010.9,
+		{"claude-fable-5", "high"}:    987.2,
+		{"claude-opus-4.8", "xhigh"}:  929.7,
+		{"gpt-5.6-sol", "max"}:        753.3,
+		{"gpt-5.5", "xhigh"}:          745.9,
+		{"claude-sonnet-4.6", "high"}: 674.1,
+		{"claude-fable-5", "medium"}:  627.6,
+		{"claude-sonnet-5", "high"}:   616.7,
+		{"gpt-5.4", "xhigh"}:          448.5,
+		{"gpt-5.5", "high"}:           428.3,
+		{"claude-opus-4.8", "medium"}: 381.9,
+		{"claude-fable-5", "low"}:     371.4,
+		{"claude-sonnet-5", "medium"}: 326.1,
+		{"gpt-5.6-sol", "high"}:       282.1,
+		{"claude-opus-4.8", "low"}:    247.6,
+		{"gpt-5.5", "medium"}:         235.7,
+		{"claude-sonnet-5", "low"}:    167.1,
+		{"gpt-5.6-sol", "medium"}:     164.4,
+		{"claude-opus-5", "low"}:      163.1,
+		{"gpt-5.6-terra", "xhigh"}:    141.7,
+		{"gpt-5.5", "low"}:            84.6,
+		{"gpt-5.6-sol", "low"}:        81.8,
+		{"gpt-5.6-luna", "max"}:       53.6,
+		{"gpt-5.6-terra", "medium"}:   35.1,
+		{"gpt-5.6-luna", "xhigh"}:     27.4,
+		{"gpt-5.6-terra", "low"}:      24.2,
+		{"gpt-5.6-luna", "high"}:      12.9,
+		{"gpt-5.6-luna", "medium"}:    2.8,
+		{"gpt-5.6-luna", "low"}:       0.8,
 	}
 
 	for key, want := range fractional {

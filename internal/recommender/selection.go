@@ -29,9 +29,25 @@ const (
 	// leaderboard and no cheap option would remain reachable in any mode.
 	// Credits are estimated GitHub Copilot AI credits; steps are the bundled
 	// latency proxy. Both ceilings are inclusive.
-	routineCreditCap = 100.0
-	routineStepCap   = 80
-	simpleCreditCap  = 60.0
+	//
+	// The credit ceilings are denominated in whole-run credits, which include input
+	// tokens. They were 100 and 60 while the bundled figures counted output tokens
+	// only; carrying those values across the 2026-08-02 basis change would have
+	// emptied both sets. The replacements preserve the exact membership the old
+	// ceilings produced: routineCreditCap must admit claude-opus-5[medium] at 352
+	// so the documented 69% quality tie-break still has both sides, and exclude
+	// claude-fable-5[low] at 371.
+	//
+	// routineStepCap is what keeps max effort out of routine work. Until the
+	// 2026-08-02 Copilot price cut the credit cap happened to exclude the max
+	// rows too, so the step cap was slack at 80; a cheaper gpt-5.6-terra[max]
+	// then entered the set at 76 steps for one point of pass@1 over
+	// gpt-5.6-sol[high] at 37. Routine work is latency-sensitive by definition,
+	// so the ceiling that bounds it must be the latency one and must not depend
+	// on a price staying where it is.
+	routineCreditCap = 360.0
+	routineStepCap   = 60
+	simpleCreditCap  = 200.0
 	simpleStepCap    = 40
 )
 
