@@ -23,7 +23,7 @@ func (s *stubRecommender) RecommendWithOptimizationAgainst(task string, optimiza
 	if s.recommendation != (recommender.Recommendation{}) {
 		return s.recommendation
 	}
-	return recommender.Recommendation{Model: recommender.GPT56Sol, ReasoningSetting: "GPT reasoning level: medium", Reason: "test recommendation"}
+	return recommender.Recommendation{Model: recommender.GPT56Sol, ReasoningSetting: "medium", Reason: "test recommendation"}
 }
 
 func TestRunParsesArgumentsAndWritesRecommendation(t *testing.T) {
@@ -135,7 +135,7 @@ func TestRunJSONExplainStaysJSONAndIncludesExplanationData(t *testing.T) {
 
 func TestRunJSONOmitsBenchmarkWhenNoExactMatch(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	rec := &stubRecommender{recommendation: recommender.Recommendation{Model: recommender.GPT54, ReasoningSetting: "GPT reasoning level: high", Reason: "unsupported level"}}
+	rec := &stubRecommender{recommendation: recommender.Recommendation{Model: recommender.GPT54, ReasoningSetting: "high", Reason: "unsupported level"}}
 
 	exitCode := Run([]string{"--json", "fix", "a", "typo"}, &stdout, &stderr, rec)
 
@@ -261,6 +261,49 @@ func TestRunAgainstUsesDefaultRecommenderForCodeReview(t *testing.T) {
 		t.Fatalf("expected success exit code, got %d: %s", exitCode, stderr.String())
 	}
 	assertContainsAll(t, stdout.String(), "Model: Claude Opus 5", "Reasoning: Anthropic Effort Level: medium")
+}
+
+// TestRunAnswersAGermanTaskInGermanWithoutChangingTheDocument exercises the
+// real recommender end to end: a German task must read in German while the
+// machine-readable document keeps its English field names and identifiers, and
+// the command must still succeed with its benchmark evidence intact.
+func TestRunAnswersAGermanTaskInGermanWithoutChangingTheDocument(t *testing.T) {
+	const germanTask = "implementiere einen kleinen Go-API-Endpunkt"
+
+	var textOut, textErr bytes.Buffer
+	if exitCode := Run([]string{"--explain", germanTask}, &textOut, &textErr, nil); exitCode != 0 {
+		t.Fatalf("expected success exit code, got %s", textErr.String())
+	}
+	assertContainsAll(t, textOut.String(), "Modell: ", "Reasoning: ", "Begründung: ", "durchschnittliche Kosten", "Geschätzte Copilot-AI-Credits: ", "(Eingabe- und Ausgabe-Tokens, Schätzwert).", "Abwägung: ")
+	assertNotContainsAny(t, textOut.String(), "Model: ", "Reason: ", "average cost", "Tradeoff: ", "$")
+
+	var jsonOut, jsonErr bytes.Buffer
+	if exitCode := Run([]string{"--json", "--explain", germanTask}, &jsonOut, &jsonErr, nil); exitCode != 0 {
+		t.Fatalf("expected success exit code, got %s", jsonErr.String())
+	}
+	var doc struct {
+		Model     string `json:"model"`
+		Reasoning string `json:"reasoning"`
+		Profile   string `json:"profile"`
+		Reason    string `json:"reason"`
+		Benchmark *struct {
+			PassAt1  float64 `json:"pass_at_1"`
+			Tradeoff string  `json:"tradeoff"`
+		} `json:"benchmark"`
+	}
+	if err := json.Unmarshal(jsonOut.Bytes(), &doc); err != nil {
+		t.Fatalf("expected valid JSON, got %q: %v", jsonOut.String(), err)
+	}
+	if doc.Model != "claude-opus-5" || doc.Reasoning != "low" || doc.Profile != "value" {
+		t.Fatalf("expected unchanged English identifiers, got %+v", doc)
+	}
+	if doc.Benchmark == nil || doc.Benchmark.PassAt1 != 0.58 {
+		t.Fatalf("expected the benchmark block to survive localization: %q", jsonOut.String())
+	}
+	if !strings.Contains(doc.Reason, "Trefferquote") || !strings.Contains(doc.Benchmark.Tradeoff, "Einstellung") {
+		t.Fatalf("expected German reason and tradeoff text, got %q and %q", doc.Reason, doc.Benchmark.Tradeoff)
+	}
+	assertNotContainsAny(t, doc.Reason+" "+doc.Benchmark.Tradeoff, "pass rate", "Lowest-cost")
 }
 
 func TestRunWithNilWritersDiscardsOutput(t *testing.T) {

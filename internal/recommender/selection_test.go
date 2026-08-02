@@ -132,7 +132,7 @@ func TestSubstantiveCodingAnchorsComeFromTheBands(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(string(tc.optimization), func(t *testing.T) {
 			rec := RecommendWithOptimization(task, tc.optimization)
-			if rec.Model != tc.wantModel || rec.ReasoningSetting != tc.wantSetting {
+			if rec.Model != tc.wantModel || reasoningSettingText(rec) != tc.wantSetting {
 				t.Fatalf("expected %s with %q, got %+v", tc.wantModel, tc.wantSetting, rec)
 			}
 
@@ -188,7 +188,7 @@ func TestAnthropicCategoriesRecommendClaudeOpus5(t *testing.T) {
 				if rec.Model != Opus5 {
 					t.Fatalf("expected %s, got %+v", Opus5, rec)
 				}
-				if rec.ReasoningSetting != wantEffort[optimization] {
+				if reasoningSettingText(rec) != wantEffort[optimization] {
 					t.Fatalf("expected %q, got %+v", wantEffort[optimization], rec)
 				}
 			})
@@ -379,27 +379,33 @@ func TestEveryReasonIdentifierResolvesToGuardrailSafeText(t *testing.T) {
 			used[id] = true
 
 			selected := set.selectFor(optimization)
-			out := Format(recommendationFor(selected.displayModel, selected.level, id))
-			assertHumanOnlyOutput(t, out)
+			for _, lang := range allLanguages {
+				out := Format(selection{row: selected, reason: id}.localize(lang))
+				assertHumanOnlyOutput(t, out, lang)
 
-			lower := strings.ToLower(out)
-			assertNotContainsAny(t, lower, "empirically faster", "measured faster", "latency advantage")
-			switch providerForModel(selected.displayModel) {
-			case providerGPT:
-				assertNotContainsAny(t, lower, "effort")
-			case providerAnthropic:
-				assertNotContainsAny(t, lower, "stronger reasoning", "equivalent terminology")
+				lower := strings.ToLower(out)
+				assertNotContainsAny(t, lower, "empirically faster", "measured faster", "latency advantage")
+				assertNotContainsAny(t, lower, "empirisch schneller", "gemessen schneller", "latenzvorteil")
+				switch providerForModel(selected.displayModel) {
+				case providerGPT:
+					// Effort is Anthropic's terminology in both languages, so a GPT
+					// recommendation must not carry it in either.
+					assertNotContainsAny(t, lower, "effort")
+				case providerAnthropic:
+					assertNotContainsAny(t, lower, "stronger reasoning", "equivalent terminology")
+					assertNotContainsAny(t, lower, "stärkeres reasoning", "entsprechende terminologie")
+				}
 			}
 		}
 	}
 
-	for id := range englishReasons {
+	for id := range reasonCopy {
 		if !used[id] {
 			t.Fatalf("reason %q is registered but unreachable", id)
 		}
 	}
-	if len(used) != len(englishReasons) {
-		t.Fatalf("%d reasons are in use but %d are registered", len(used), len(englishReasons))
+	if len(used) != len(reasonCopy) {
+		t.Fatalf("%d reasons are in use but %d are registered", len(used), len(reasonCopy))
 	}
 }
 

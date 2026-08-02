@@ -25,6 +25,32 @@ Quality takes the highest pass rate, value the cheapest candidate within five po
 
 By default Wayfinder selects GPT 5.6 Sol at high reasoning for substantive coding work, Claude Opus 5 for visual, UI, UX, long-form, and creative work, and cheaper, shorter settings for routine and simple tasks.
 
+## German task descriptions
+
+A task described in German is answered in German:
+
+```sh
+go run ./cmd/wayfinder --explain "implementiere einen kleinen Go-API-Endpunkt"
+```
+
+```text
+Modell: Claude Opus 5
+Reasoning: Anthropic-Effort-Stufe: low
+Begründung: Bester Kompromiss für eine einfache Aufgabe: die günstigste Wahl wenige Punkte unter der höchsten Trefferquote.
+Benchmark: Pass@1 58%±2%; durchschnittliche Kosten 1.66.
+Geschätzte Copilot-AI-Credits: 163.1 (Eingabe- und Ausgabe-Tokens, Schätzwert).
+Abwägung: Günstigste Opus-5-Einstellung, deutlich unter dem Pass@1 der höheren Stufen.
+```
+
+There is no language flag: the language follows the prompt.
+Detection is an offline heuristic biased toward English, so output switches to German only when the task text carries at least two distinct German-only words.
+An English prompt containing a single German word stays English.
+Detection ignores capitalization, which is why German function words that English technical prompts also use as words, identifiers, or acronyms are not markers at all.
+
+Language never changes the recommendation.
+A German prompt and its English equivalent select the same model and the same effort level, and JSON output is unaffected: field names, the normalized model and reasoning IDs, the profile, and the benchmark keys stay English, while `reason` and `tradeoff` carry German text.
+Effort levels, model names, and `Pass@1` are provider-defined identifiers and stay untranslated in both languages.
+
 ## Optimization flags
 
 Use `--optimize value`, `--optimize cost`, `--optimize speed`, or `--optimize quality` to select the recommendation mode.

@@ -295,11 +295,19 @@ func lessBy(order []rowKey, a, b candidateRow) bool {
 	return false
 }
 
-// recommendFromSet returns the recommendation the set's band computes for the
-// requested optimization mode.
-func recommendFromSet(set candidateSet, optimization Optimization) Recommendation {
-	selected := set.selectFor(optimization)
-	return recommendationFor(selected.displayModel, selected.level, set.reasonFor(optimization))
+// selection is the structural answer to a task: the benchmark row a band chose
+// and the identifier of the reason for choosing it. It holds no prose and no
+// language, so everything that produces a selection is language-independent by
+// construction.
+type selection struct {
+	row    candidateRow
+	reason reasonID
+}
+
+// selectionFor returns what the set's band computes for the requested
+// optimization mode.
+func (set candidateSet) selectionFor(optimization Optimization) selection {
+	return selection{row: set.selectFor(optimization), reason: set.reasonFor(optimization)}
 }
 
 func (set candidateSet) reasonFor(optimization Optimization) reasonID {
@@ -309,17 +317,21 @@ func (set candidateSet) reasonFor(optimization Optimization) reasonID {
 	return set.reasons[OptimizeValue]
 }
 
-// recommendationFor labels the recommendation with the terminology of the
-// selected model's provider. A single category can select either family across
-// modes, so terminology follows the selection rather than the rule.
-func recommendationFor(model, level string, reason reasonID) Recommendation {
-	text := reasonText(reason)
-	switch providerForModel(model) {
-	case providerGPT:
-		return gptRecommendation(model, level, text)
-	case providerAnthropic:
-		return anthropicRecommendation(model, level, text)
-	default:
-		panic(fmt.Sprintf("recommender: selected model %q has no provider family", model))
+// localize writes a selection out as a recommendation in lang. It is the single
+// place the detected language enters the pipeline, which is what keeps detection
+// one-way: nothing upstream of it can read the language back.
+//
+// The effort level is stored as the provider's bare identifier; which
+// terminology labels it is decided when the recommendation is formatted, since
+// a single category can select either provider family across modes.
+func (s selection) localize(lang language) Recommendation {
+	if providerForModel(s.row.displayModel) == providerUnknown {
+		panic(fmt.Sprintf("recommender: selected model %q has no provider family", s.row.displayModel))
+	}
+	return Recommendation{
+		Model:            s.row.displayModel,
+		ReasoningSetting: s.row.level,
+		Reason:           reasonText(s.reason, lang),
+		Language:         lang,
 	}
 }

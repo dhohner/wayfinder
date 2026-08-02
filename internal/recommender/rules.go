@@ -1,43 +1,45 @@
 package recommender
 
+// recommendationRule matches a task category and names the candidate set that
+// answers it. Both functions see only the task traits: a rule cannot observe the
+// output language, so a German prompt and its English equivalent reach the same
+// candidate set and therefore the same model and effort level. Language enters
+// once, where the resulting selection is localized.
 type recommendationRule struct {
-	matches   func(taskTraits) bool
-	recommend func(Optimization, taskTraits) Recommendation
+	matches func(taskTraits) bool
+	selects func(taskTraits) *candidateSet
 }
 
 // defaultRules are evaluated in order; the first match wins. Each rule maps its
 // task category to a candidate set and lets that set's bands choose the model
 // and effort level for the requested optimization mode.
 var defaultRules = []recommendationRule{
-	{matches: func(traits taskTraits) bool { return traits.codeReview }, recommend: recommendCodeReview},
-	{matches: isVisualDesignOnly, recommend: recommendUsing(&anthropicSet)},
-	{matches: func(traits taskTraits) bool { return traits.coding }, recommend: recommendCoding},
-	{matches: func(traits taskTraits) bool { return traits.anthropicFit }, recommend: recommendUsing(&anthropicSet)},
-	{matches: func(traits taskTraits) bool { return traits.highRisk }, recommend: recommendUsing(&substantiveSet)},
-	{matches: func(traits taskTraits) bool { return traits.deepReasoning }, recommend: recommendUsing(&substantiveSet)},
-	{matches: func(traits taskTraits) bool { return traits.nuancedRoutine }, recommend: recommendUsing(&routineSet)},
-	{matches: func(traits taskTraits) bool { return traits.simple && !traits.largeContext }, recommend: recommendUsing(&simpleSet)},
-	{matches: func(traits taskTraits) bool { return traits.largeContext }, recommend: recommendUsing(&routineSet)},
+	{matches: func(traits taskTraits) bool { return traits.codeReview }, selects: selectCodeReviewSet},
+	{matches: isVisualDesignOnly, selects: alwaysSelect(&anthropicSet)},
+	{matches: func(traits taskTraits) bool { return traits.coding }, selects: selectCodingSet},
+	{matches: func(traits taskTraits) bool { return traits.anthropicFit }, selects: alwaysSelect(&anthropicSet)},
+	{matches: func(traits taskTraits) bool { return traits.highRisk || traits.deepReasoning }, selects: alwaysSelect(&substantiveSet)},
+	{matches: func(traits taskTraits) bool { return traits.nuancedRoutine }, selects: alwaysSelect(&routineSet)},
+	{matches: func(traits taskTraits) bool { return traits.simple && !traits.largeContext }, selects: alwaysSelect(&simpleSet)},
+	{matches: func(traits taskTraits) bool { return traits.largeContext }, selects: alwaysSelect(&routineSet)},
 }
 
-func recommendUsing(set *candidateSet) func(Optimization, taskTraits) Recommendation {
-	return func(optimization Optimization, _ taskTraits) Recommendation {
-		return recommendFromSet(*set, optimization)
-	}
+func alwaysSelect(set *candidateSet) func(taskTraits) *candidateSet {
+	return func(taskTraits) *candidateSet { return set }
 }
 
 func isVisualDesignOnly(traits taskTraits) bool {
 	return traits.visualDesign && !traits.codingIntent && !traits.technicalDesign
 }
 
-func recommendCoding(optimization Optimization, traits taskTraits) Recommendation {
+func selectCodingSet(traits taskTraits) *candidateSet {
 	if isSimpleCoding(traits) {
-		return recommendFromSet(simpleSet, optimization)
+		return &simpleSet
 	}
 	if isHighReasoningCoding(traits) {
-		return recommendFromSet(substantiveSet, optimization)
+		return &substantiveSet
 	}
-	return recommendFromSet(routineSet, optimization)
+	return &routineSet
 }
 
 func isHighReasoningCoding(traits taskTraits) bool {
@@ -47,11 +49,11 @@ func isHighReasoningCoding(traits taskTraits) bool {
 	return traits.highRisk || traits.deepReasoning || traits.correctnessHeavy || (traits.largeContext && !traits.routineCoding)
 }
 
-func recommendCodeReview(optimization Optimization, traits taskTraits) Recommendation {
+func selectCodeReviewSet(traits taskTraits) *candidateSet {
 	if traits.against == AgainstGPT {
-		return recommendFromSet(anthropicSet, optimization)
+		return &anthropicSet
 	}
-	return recommendFromSet(substantiveSet, optimization)
+	return &substantiveSet
 }
 
 func isSimpleCoding(traits taskTraits) bool {

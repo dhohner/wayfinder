@@ -1,6 +1,7 @@
 package recommender
 
 import (
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -378,6 +379,48 @@ var correctnessHeavyActionSignals = signalTerms{
 	},
 }
 
+// allSignalFamilies registers every signal family declared above, keyed by the
+// name of its variable. Language detection reads both sides of all of them, so a
+// family missing here would silently withhold its terms as language evidence.
+// Every new family must be added.
+//
+// The registry is keyed rather than a bare list so that family identity is
+// checkable: a duplicate key is a compile error, and the completeness test parses
+// this file to prove the keys are exactly the families it declares.
+var allSignalFamilies = map[string]signalTerms{
+	"simpleSignals":                     simpleSignals,
+	"codingSignals":                     codingSignals,
+	"codingIntentSignals":               codingIntentSignals,
+	"largeContextSignals":               largeContextSignals,
+	"codeReviewSignals":                 codeReviewSignals,
+	"anthropicFitSignals":               anthropicFitSignals,
+	"visualDesignSignals":               visualDesignSignals,
+	"technicalDesignSignals":            technicalDesignSignals,
+	"nuancedRoutineSignals":             nuancedRoutineSignals,
+	"deepReasoningSignals":              deepReasoningSignals,
+	"highRiskSignals":                   highRiskSignals,
+	"correctnessHeavySignals":           correctnessHeavySignals,
+	"routineCodingSignals":              routineCodingSignals,
+	"modelSelectionSignals":             modelSelectionSignals,
+	"modelSelectionCodingActionSignals": modelSelectionCodingActionSignals,
+	"reviewActionSignals":               reviewActionSignals,
+	"reviewObjectSignals":               reviewObjectSignals,
+	"metaCodeReviewFeatureSignals":      metaCodeReviewFeatureSignals,
+	"correctnessHeavyActionSignals":     correctnessHeavyActionSignals,
+}
+
+// sortedSignalFamilyNames returns the registered family names in a fixed order,
+// so that every vocabulary derived from the registry is built deterministically
+// rather than in Go's randomized map order.
+func sortedSignalFamilyNames() []string {
+	names := make([]string, 0, len(allSignalFamilies))
+	for name := range allSignalFamilies {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 func classify(task string) taskTraits {
 	text := strings.ToLower(task)
 	correctnessHeavy := correctnessHeavySignals.matches(text)
@@ -427,14 +470,35 @@ func hasAny(text string, needles ...string) bool {
 	return false
 }
 
-// containsTerm reports whether needle occurs in text as a whole word. Matching a
-// term inside a longer word would be wrong in both languages ("auth" in
-// "author", "regel" in "Regelüberwachung"), so both surrounding characters must
-// be boundaries.
+// textSpan is a half-open byte range of the text a term was found in.
+type textSpan struct {
+	start int
+	end   int
+}
+
+func (s textSpan) overlaps(other textSpan) bool {
+	return s.start < other.end && other.start < s.end
+}
+
+// containsTerm reports whether needle occurs in text as a whole word.
 func containsTerm(text, needle string) bool {
+	found := false
+	visitTermOccurrences(text, needle, func(textSpan) bool {
+		found = true
+		return false
+	})
+	return found
+}
+
+// visitTermOccurrences calls visit with every occurrence of needle in text that
+// stands as a whole word, in order of appearance, and stops early once visit
+// returns false. Matching a term inside a longer word would be wrong in both
+// languages ("auth" in "author", "regel" in "Regelüberwachung"), so both
+// surrounding characters must be boundaries.
+func visitTermOccurrences(text, needle string, visit func(textSpan) bool) {
 	needle = strings.TrimSpace(needle)
 	if needle == "" {
-		return false
+		return
 	}
 
 	// A rejected occurrence does not rule out a later standalone one, so the
@@ -442,18 +506,18 @@ func containsTerm(text, needle string) bool {
 	for offset := 0; offset <= len(text)-len(needle); {
 		index := strings.Index(text[offset:], needle)
 		if index < 0 {
-			return false
+			return
 		}
 
 		start := offset + index
-		if isBoundaryBefore(text, start) && isBoundaryAfter(text, start+len(needle)) {
-			return true
+		end := start + len(needle)
+		if isBoundaryBefore(text, start) && isBoundaryAfter(text, end) && !visit(textSpan{start: start, end: end}) {
+			return
 		}
 
 		_, width := utf8.DecodeRuneInString(text[start:])
 		offset = start + width
 	}
-	return false
 }
 
 // isBoundaryBefore and isBoundaryAfter decode whole runes rather than single

@@ -118,10 +118,13 @@ func TestGermanPromptsGetTheSameRecommendationAsTheirEnglishEquivalent(t *testin
 						optimization, pair.german, german.Model, german.ReasoningSetting,
 						pair.english, english.Model, english.ReasoningSetting)
 				}
-				if german.Reason == defaultRecommendation().Reason {
+				// The fall-through check compares each prompt against the default
+				// written in that prompt's own language; comparing against the
+				// English default would pass vacuously for German prompts.
+				if german.Reason == ambiguousDefaultSelection().localize(german.Language).Reason {
 					t.Fatalf("optimization %q: German prompt %q fell through to the ambiguous-task default", optimization, pair.german)
 				}
-				if english.Reason == defaultRecommendation().Reason {
+				if english.Reason == ambiguousDefaultSelection().localize(english.Language).Reason {
 					t.Fatalf("optimization %q: English prompt %q fell through to the ambiguous-task default", optimization, pair.english)
 				}
 			}

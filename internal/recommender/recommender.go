@@ -26,10 +26,17 @@ const (
 )
 
 // Recommendation is the single model choice Wayfinder returns for a task.
+//
+// Model and ReasoningSetting are identifiers and never localize: ReasoningSetting
+// carries the bare provider effort level ("high"), and the provider terminology
+// that labels it is added when the recommendation is formatted. Reason is
+// human-readable text already written in Language, which is detected from the
+// task text and defaults to English.
 type Recommendation struct {
 	Model            string
 	ReasoningSetting string
 	Reason           string
+	Language         language
 }
 
 // Optimization is the recommendation mode requested by the developer.
@@ -83,16 +90,12 @@ func ParseAgainstFamily(value string) (AgainstFamily, bool) {
 // Service evaluates task descriptions against configured recommendation rules.
 // It is immutable after construction and safe to reuse across requests.
 type Service struct {
-	rules                 []recommendationRule
-	defaultRecommendation Recommendation
+	rules []recommendationRule
 }
 
 // NewService returns a recommender using Wayfinder's bundled offline rules.
 func NewService() Service {
-	return Service{
-		rules:                 append([]recommendationRule(nil), defaultRules...),
-		defaultRecommendation: defaultRecommendation(),
-	}
+	return Service{rules: append([]recommendationRule(nil), defaultRules...)}
 }
 
 // Recommend returns one offline, rules-based recommendation for a natural-language task.
@@ -122,9 +125,19 @@ func (s Service) RecommendWithOptimization(task string, optimization Optimizatio
 
 // RecommendWithOptimizationAgainst returns one recommendation for the requested optimization mode.
 // The against family only affects tasks classified as code review.
+//
+// The task is answered in two steps that cannot see each other: the rules pick a
+// model and a reason identifier from the task traits alone, and the detected
+// language is applied to that selection afterwards. A language therefore cannot
+// change which model or effort level a task is answered with, which is also why
+// it is never part of taskTraits.
 func (s Service) RecommendWithOptimizationAgainst(task string, optimization Optimization, against AgainstFamily) Recommendation {
 	traits := classify(task)
 	traits.against = against
+	return s.selectionFor(traits, optimization).localize(detectLanguage(task))
+}
+
+func (s Service) selectionFor(traits taskTraits, optimization Optimization) selection {
 	rules := s.rules
 	if rules == nil {
 		rules = defaultRules
@@ -132,23 +145,18 @@ func (s Service) RecommendWithOptimizationAgainst(task string, optimization Opti
 
 	for _, rule := range rules {
 		if rule.matches(traits) {
-			return rule.recommend(optimization, traits)
+			return rule.selects(traits).selectionFor(optimization)
 		}
 	}
-
-	if s.defaultRecommendation == (Recommendation{}) {
-		return defaultRecommendation()
-	}
-	return s.defaultRecommendation
+	return ambiguousDefaultSelection()
 }
 
-// defaultRecommendation answers a task that matched no rule. Unlike the rules it
-// ignores the optimization mode, staying deliberately conservative when the
-// request gives too little signal to optimize for anything in particular. Its
-// model and effort are the routine set's cost anchor.
-func defaultRecommendation() Recommendation {
-	selected := routineSet.selectFor(OptimizeCost)
-	return recommendationFor(selected.displayModel, selected.level, reasonAmbiguousDefault)
+// ambiguousDefaultSelection answers a task that matched no rule. Unlike the
+// rules it ignores the optimization mode, staying deliberately conservative when
+// the request gives too little signal to optimize for anything in particular.
+// Its model and effort are the routine set's cost anchor.
+func ambiguousDefaultSelection() selection {
+	return selection{row: routineSet.selectFor(OptimizeCost), reason: reasonAmbiguousDefault}
 }
 
 type modelInfo struct {
