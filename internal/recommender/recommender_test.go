@@ -22,7 +22,7 @@ func TestRecommendReturnsOneSupportedModelAndProviderSetting(t *testing.T) {
 	}
 }
 
-func TestRecommendSimpleTaskUsesLowEffortClaudeOpus5(t *testing.T) {
+func TestRecommendSimpleTaskUsesMaxReasoningGPT56Luna(t *testing.T) {
 	cases := []string{
 		"summarize these release notes",
 		"fix a typo in a README",
@@ -32,11 +32,11 @@ func TestRecommendSimpleTaskUsesLowEffortClaudeOpus5(t *testing.T) {
 	for _, task := range cases {
 		rec := Recommend(task)
 
-		if rec.Model != Opus5 {
-			t.Fatalf("expected %s for %q, got %s", Opus5, task, rec.Model)
+		if rec.Model != GPT56Luna {
+			t.Fatalf("expected %s for %q, got %s", GPT56Luna, task, rec.Model)
 		}
-		if reasoningSettingText(rec) != "Anthropic Effort Level: low" {
-			t.Fatalf("expected low effort for %q, got %q", task, reasoningSettingText(rec))
+		if reasoningSettingText(rec) != "GPT reasoning level: max" {
+			t.Fatalf("expected max reasoning for %q, got %q", task, reasoningSettingText(rec))
 		}
 	}
 }
@@ -60,11 +60,11 @@ func TestRecommendNuancedRoutineTaskUsesGPT56SolHighReasoning(t *testing.T) {
 func TestRecommendAmbiguousTaskUsesConservativeOfflineDefault(t *testing.T) {
 	rec := Recommend("help me with this task")
 
-	if rec.Model != GPT56Terra {
-		t.Fatalf("expected conservative default %s, got %s", GPT56Terra, rec.Model)
+	if rec.Model != GPT56Luna {
+		t.Fatalf("expected conservative default %s, got %s", GPT56Luna, rec.Model)
 	}
-	if reasoningSettingText(rec) != "GPT reasoning level: xhigh" {
-		t.Fatalf("expected GPT xhigh reasoning, got %q", reasoningSettingText(rec))
+	if reasoningSettingText(rec) != "GPT reasoning level: max" {
+		t.Fatalf("expected GPT max reasoning, got %q", reasoningSettingText(rec))
 	}
 }
 
@@ -73,7 +73,7 @@ func TestZeroValueServiceUsesBundledDefaults(t *testing.T) {
 
 	rec := svc.Recommend("help me with this task")
 
-	if rec.Model != GPT56Terra || reasoningSettingText(rec) != "GPT reasoning level: xhigh" {
+	if rec.Model != GPT56Luna || reasoningSettingText(rec) != "GPT reasoning level: max" {
 		t.Fatalf("expected zero-value service to use bundled defaults, got %+v", rec)
 	}
 }
@@ -280,23 +280,23 @@ func TestOptimizeQualityRaisesRoutineCodingToHigh(t *testing.T) {
 	}
 }
 
-// TestOptimizeCostPicksTheCheapestRoutineCandidate pins cost mode to the routine
-// set's credit anchor. gpt-5.6-terra[xhigh] took this from gpt-5.6-sol[medium]
-// in the 2026-08-02 price refresh: 48 credits against 54, one point of pass@1
-// lower and still inside the routine ceilings.
+// Routine cost selects its credit anchor without applying the latency budget.
 func TestOptimizeCostPicksTheCheapestRoutineCandidate(t *testing.T) {
 	rec := RecommendWithOptimization("implement a Go API endpoint", OptimizeCost)
 
-	if rec.Model != GPT56Terra || reasoningSettingText(rec) != "GPT reasoning level: xhigh" {
-		t.Fatalf("expected xhigh-reasoning %s, got %+v", GPT56Terra, rec)
+	if rec.Model != GPT56Luna || reasoningSettingText(rec) != "GPT reasoning level: max" {
+		t.Fatalf("expected max-reasoning %s, got %+v", GPT56Luna, rec)
 	}
 }
 
-func TestOptimizeSpeedKeepsConservativeReasoningForAmbiguousTask(t *testing.T) {
-	rec := RecommendWithOptimization("help me with this task", OptimizeSpeed)
-
-	if rec.Model != GPT56Terra || reasoningSettingText(rec) != "GPT reasoning level: xhigh" {
-		t.Fatalf("expected xhigh-reasoning %s, got %+v", GPT56Terra, rec)
+func TestAmbiguousTaskIgnoresRequestedOptimization(t *testing.T) {
+	want := ambiguousDefaultSelection().localize(languageEnglish)
+	for _, optimization := range allOptimizations {
+		t.Run(string(optimization), func(t *testing.T) {
+			if rec := RecommendWithOptimization("help me with this task", optimization); rec != want {
+				t.Fatalf("expected optimization-independent ambiguous default %+v, got %+v", want, rec)
+			}
+		})
 	}
 }
 
@@ -308,14 +308,17 @@ func TestOptimizeSpeedKeepsCodingCapabilityForModerateCodingTask(t *testing.T) {
 	}
 }
 
+// TestOptimizeQualityDoesNotRaiseSimpleNonCodingTask holds quality mode inside
+// the simple category's cost budget: it takes the best row that budget admits
+// rather than climbing to the top of the leaderboard.
 func TestOptimizeQualityDoesNotRaiseSimpleNonCodingTask(t *testing.T) {
 	rec := RecommendWithOptimization("summarize these release notes", OptimizeQuality)
 
-	if rec.Model != GPT56Sol {
-		t.Fatalf("expected quality optimization to keep GPT 5.6 Sol for simple task, got %s", rec.Model)
+	if rec.Model != GPT56Luna {
+		t.Fatalf("expected quality optimization to keep %s for simple task, got %s", GPT56Luna, rec.Model)
 	}
-	if reasoningSettingText(rec) != "GPT reasoning level: medium" {
-		t.Fatalf("expected moderate reasoning for simple non-coding task, got %q", reasoningSettingText(rec))
+	if reasoningSettingText(rec) != "GPT reasoning level: max" {
+		t.Fatalf("expected the simple category's best affordable row, got %q", reasoningSettingText(rec))
 	}
 }
 
@@ -405,7 +408,7 @@ func TestAgainstDoesNotOverrideNonCodeReviewSelection(t *testing.T) {
 	}
 
 	rec = RecommendWithOptimizationAgainst("fix a typo in a README", OptimizeValue, AgainstGPT)
-	if rec.Model != Opus5 || reasoningSettingText(rec) != "Anthropic Effort Level: low" {
+	if rec.Model != GPT56Luna || reasoningSettingText(rec) != "GPT reasoning level: max" {
 		t.Fatalf("expected simple recommendation to ignore --against, got %+v", rec)
 	}
 }
@@ -430,13 +433,13 @@ func TestCodingBenchmarkOptimizationMatrix(t *testing.T) {
 	}{
 		{"routine default", "implement a Go API endpoint", OptimizeValue, GPT56Sol, "GPT reasoning level: high"},
 		{"routine value", "implement a Go API endpoint", OptimizeValue, GPT56Sol, "GPT reasoning level: high"},
-		{"routine cost", "implement a Go API endpoint", OptimizeCost, GPT56Terra, "GPT reasoning level: xhigh"},
+		{"routine cost", "implement a Go API endpoint", OptimizeCost, GPT56Luna, "GPT reasoning level: max"},
 		{"routine speed", "implement a Go API endpoint", OptimizeSpeed, GPT56Sol, "GPT reasoning level: medium"},
 		{"routine quality", "implement a Go API endpoint", OptimizeQuality, GPT56Sol, "GPT reasoning level: high"},
-		{"simple value", "rename a variable in a small Go function", OptimizeValue, Opus5, "Anthropic Effort Level: low"},
-		{"simple cost", "rename a variable in a small Go function", OptimizeCost, GPT56Terra, "GPT reasoning level: high"},
+		{"simple value", "rename a variable in a small Go function", OptimizeValue, GPT56Luna, "GPT reasoning level: max"},
+		{"simple cost", "rename a variable in a small Go function", OptimizeCost, GPT56Luna, "GPT reasoning level: xhigh"},
 		{"simple speed", "rename a variable in a small Go function", OptimizeSpeed, GPT56Sol, "GPT reasoning level: medium"},
-		{"simple quality", "rename a variable in a small Go function", OptimizeQuality, GPT56Sol, "GPT reasoning level: medium"},
+		{"simple quality", "rename a variable in a small Go function", OptimizeQuality, GPT56Luna, "GPT reasoning level: max"},
 	}
 
 	for _, tc := range cases {
@@ -956,22 +959,28 @@ func TestBuiltInRecommendationsStayWithinHumanOnlyOutputGuardrails(t *testing.T)
 	}
 }
 
-// TestMaxEffortIsReachableOnlyWhereItsBandSelectsIt replaces an earlier rule that
-// no recommendation may use max effort. Max is now a legitimate pick wherever the
-// bands select it, but the credit and step ceilings must keep it unreachable for
-// routine and simple work.
+// Max effort is valid when the selected row satisfies its category's cost
+// budget and optimization band.
 func TestMaxEffortIsReachableOnlyWhereItsBandSelectsIt(t *testing.T) {
-	capped := []string{
-		"implement a Go API endpoint",
-		"fix a typo in a README",
-		"rewrite this support reply to be firm but empathetic",
-		"help me with this task",
+	budgeted := []struct {
+		task       string
+		costBudget float64
+	}{
+		{"implement a Go API endpoint", routineCostBudget},
+		{"fix a typo in a README", simpleCostBudget},
+		{"rewrite this support reply to be firm but empathetic", routineCostBudget},
+		// An ambiguous task is answered from the routine candidate set.
+		{"help me with this task", routineCostBudget},
 	}
-	for _, task := range capped {
+	for _, tc := range budgeted {
 		for _, optimization := range allOptimizations {
-			rec := RecommendWithOptimization(task, optimization)
-			if strings.HasSuffix(reasoningSettingText(rec), ": max") {
-				t.Fatalf("capped category must not reach max effort for %q with %q: %+v", task, optimization, rec)
+			rec := RecommendWithOptimization(tc.task, optimization)
+			entry, ok := benchmarkForRecommendation(rec)
+			if !ok {
+				t.Fatalf("expected a bundled benchmark row for %q with %q: %+v", tc.task, optimization, rec)
+			}
+			if entry.credits > tc.costBudget {
+				t.Fatalf("budgeted category must stay inside its cost budget for %q with %q: %+v costs %.1f credits against a budget of %.1f", tc.task, optimization, rec, entry.credits, tc.costBudget)
 			}
 		}
 	}

@@ -56,6 +56,19 @@ var allReasonIDs = []reasonID{
 // latency and not a latency measurement. German copy additionally avoids
 // "Effort", which is Anthropic's terminology and must not surface in a GPT
 // recommendation.
+//
+// Where a band's answer may run long, its sentence says so. The simple category
+// declares no latency budget and cost mode is never narrowed by one, so simple
+// quality, value, and cost, routine cost, and the ambiguous default can answer
+// with a row costing several times the steps of the shortest setting in their
+// set. The reason line is always shown while the row's tradeoff line needs
+// --explain, and the row tradeoff is shared by every category selecting that
+// row, so the disclosure belongs here rather than there. It is written in steps,
+// never as a claim about measured wall-clock.
+//
+// Substantive quality and cost also answer with long-running rows and carry no
+// such disclosure: substantive declares no latency budget and never promised a
+// short answer, so there is no shorter answer for the copy to correct.
 var reasonCopy = map[reasonID]localizedText{
 	reasonSubstantiveQuality: {
 		english: "Highest pass rate available for substantive work, chosen for quality despite a high credit estimate.",
@@ -66,8 +79,8 @@ var reasonCopy = map[reasonID]localizedText{
 		german:  "Bester Kompromiss für anspruchsvolle Arbeit: wenige Punkte unter der höchsten Trefferquote bei einem Bruchteil der Credits.",
 	},
 	reasonSubstantiveCost: {
-		english: "Cheapest choice that still clears the pass rate substantive work needs.",
-		german:  "Günstigste Wahl, die die für anspruchsvolle Arbeit nötige Trefferquote noch erreicht.",
+		english: "Best pass rate among the lowest-credit settings that clear the floor substantive work needs.",
+		german:  "Beste Trefferquote unter den Einstellungen mit den niedrigsten Credits, die die für anspruchsvolle Arbeit nötige Untergrenze erreichen.",
 	},
 	reasonSubstantiveSpeed: {
 		english: "Fewest steps for substantive work while staying within a few points of the top pass rate.",
@@ -79,12 +92,12 @@ var reasonCopy = map[reasonID]localizedText{
 		german:  "Höchste Trefferquote, die Claude bei feinsinniger Arbeit erreicht, wegen der Qualität gewählt, obwohl sie die meisten Credits verbraucht.",
 	},
 	reasonAnthropicValue: {
-		english: "Best Claude value for nuanced work: close to its top pass rate for a third of the credits.",
-		german:  "Bester Claude-Kompromiss für feinsinnige Arbeit: nahe an seiner höchsten Trefferquote für ein Drittel der Credits.",
+		english: "Best Claude value for nuanced work: close to its top pass rate for a quarter of the credits.",
+		german:  "Bester Claude-Kompromiss für feinsinnige Arbeit: nahe an seiner höchsten Trefferquote für ein Viertel der Credits.",
 	},
 	reasonAnthropicCost: {
-		english: "Cheapest Claude setting that still clears the pass rate nuanced work needs.",
-		german:  "Günstigste Claude-Einstellung, die die für feinsinnige Arbeit nötige Trefferquote noch erreicht.",
+		english: "Best Claude pass rate among the lowest-credit settings that clear the floor nuanced work needs.",
+		german:  "Beste Claude-Trefferquote unter den Einstellungen mit den niedrigsten Credits, die die für feinsinnige Arbeit nötige Untergrenze erreichen.",
 	},
 	reasonAnthropicSpeed: {
 		english: "Fewest steps Claude needs on nuanced work while staying close to its top pass rate.",
@@ -92,16 +105,16 @@ var reasonCopy = map[reasonID]localizedText{
 	},
 
 	reasonRoutineQuality: {
-		english: "Highest pass rate that stays inside the credit and step limits kept for routine work.",
-		german:  "Höchste Trefferquote innerhalb der Credit- und Schrittgrenzen, die für Routinearbeit gelten.",
+		english: "Highest pass rate compatible with the credit budget and quality safeguards for routine work.",
+		german:  "Höchste Trefferquote im Einklang mit dem Credit-Budget und den Qualitätsvorgaben für Routinearbeit.",
 	},
 	reasonRoutineValue: {
-		english: "Best value for routine work: the top pass rate available inside its credit and step limits.",
-		german:  "Bester Kompromiss für Routinearbeit: die höchste Trefferquote innerhalb ihrer Credit- und Schrittgrenzen.",
+		english: "Best value within the credit budget and safeguards for routine work.",
+		german:  "Bester Kompromiss innerhalb des Credit-Budgets und der Vorgaben für Routinearbeit.",
 	},
 	reasonRoutineCost: {
-		english: "Cheapest choice inside the routine limits that still clears the pass rate routine work needs.",
-		german:  "Günstigste Wahl innerhalb der Routinegrenzen, die die für Routinearbeit nötige Trefferquote noch erreicht.",
+		english: "Best pass rate among the lowest-credit choices inside the routine credit limit, and it runs well past the step count routine work usually keeps to.",
+		german:  "Beste Trefferquote unter den günstigsten Optionen innerhalb der Credit-Grenze für Routinearbeit, und sie läuft deutlich über die Schrittzahl hinaus, die Routinearbeit sonst einhält.",
 	},
 	reasonRoutineSpeed: {
 		english: "Fewest steps inside the routine limits while staying within a few points of the top pass rate.",
@@ -109,16 +122,16 @@ var reasonCopy = map[reasonID]localizedText{
 	},
 
 	reasonSimpleQuality: {
-		english: "Highest pass rate that keeps a simple, low-risk task cheap and short.",
-		german:  "Höchste Trefferquote, die eine einfache, risikoarme Aufgabe günstig und kurz hält.",
+		english: "Highest pass rate that keeps a simple, low-risk task cheap, and it takes noticeably more steps than a simple task usually needs.",
+		german:  "Höchste Trefferquote, die eine einfache, risikoarme Aufgabe günstig hält, und sie braucht deutlich mehr Schritte, als eine einfache Aufgabe sonst benötigt.",
 	},
 	reasonSimpleValue: {
-		english: "Best value for a simple task: the cheapest choice within a few points of the top pass rate.",
-		german:  "Bester Kompromiss für eine einfache Aufgabe: die günstigste Wahl wenige Punkte unter der höchsten Trefferquote.",
+		english: "Best value for a simple task: the best pass rate among the lowest-credit choices near the top score, and it takes noticeably more steps than a simple task usually needs.",
+		german:  "Bester Kompromiss für eine einfache Aufgabe: die beste Trefferquote unter den günstigsten Optionen nahe der höchsten Trefferquote, und sie braucht deutlich mehr Schritte, als eine einfache Aufgabe sonst benötigt.",
 	},
 	reasonSimpleCost: {
-		english: "Cheapest choice that still clears the pass rate a simple, low-risk task needs.",
-		german:  "Günstigste Wahl, die die für eine einfache, risikoarme Aufgabe nötige Trefferquote noch erreicht.",
+		english: "Best pass rate among the lowest-credit choices that clear the floor for a simple, low-risk task, and it trades a longer run for the lower credit cost.",
+		german:  "Beste Trefferquote unter den günstigsten Optionen, die die Untergrenze für eine einfache, risikoarme Aufgabe erreichen, und sie erkauft die geringeren Credit-Kosten mit einem längeren Lauf.",
 	},
 	reasonSimpleSpeed: {
 		english: "Fewest steps for a simple task while staying close to the top pass rate.",
@@ -126,8 +139,8 @@ var reasonCopy = map[reasonID]localizedText{
 	},
 
 	reasonAmbiguousDefault: {
-		english: "Conservative default for an ambiguous task: strong value with enough reasoning for unclear work.",
-		german:  "Konservative Voreinstellung für eine unklare Aufgabe: guter Kompromiss mit genug Reasoning für unklare Arbeit.",
+		english: "Conservative default for an ambiguous task: the best pass rate among the lowest-credit routine choices, trading a longer run for the lower credit cost.",
+		german:  "Konservative Voreinstellung für eine unklare Aufgabe: Sie bietet die beste Trefferquote unter den Routineoptionen mit den niedrigsten Credits und nimmt für die geringeren Credit-Kosten einen längeren Lauf in Kauf.",
 	},
 }
 

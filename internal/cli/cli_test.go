@@ -294,10 +294,10 @@ func TestRunAnswersAGermanTaskInGermanWithoutChangingTheDocument(t *testing.T) {
 	if err := json.Unmarshal(jsonOut.Bytes(), &doc); err != nil {
 		t.Fatalf("expected valid JSON, got %q: %v", jsonOut.String(), err)
 	}
-	if doc.Model != "claude-opus-5" || doc.Reasoning != "low" || doc.Profile != "value" {
+	if doc.Model != "gpt-5.6-luna" || doc.Reasoning != "max" || doc.Profile != "value" {
 		t.Fatalf("expected unchanged English identifiers, got %+v", doc)
 	}
-	if doc.Benchmark == nil || doc.Benchmark.PassAt1 != 0.58 {
+	if doc.Benchmark == nil || doc.Benchmark.PassAt1 != 0.67 {
 		t.Fatalf("expected the benchmark block to survive localization: %q", jsonOut.String())
 	}
 	if !strings.Contains(doc.Reason, "Trefferquote") || !strings.Contains(doc.Benchmark.Tradeoff, "Einstellung") {
